@@ -63,7 +63,7 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     action set_l2_next_hop(mac_addr_t dmac) {
-        //FIXME set smac
+        hdr.ethernet.src_addr = hdr.ethernet.dst_addr;
         hdr.ethernet.dst_addr = dmac;
         hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
     }

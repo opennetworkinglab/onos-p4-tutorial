@@ -35,6 +35,7 @@ import ptf.testutils as testutils
 import scapy.packet
 import scapy.utils
 from google.rpc import status_pb2, code_pb2
+from ipaddress import ip_address
 from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
 from ptf import config
@@ -65,6 +66,11 @@ def stringify(n, length):
 def ipv4_to_binary(addr):
     bytes_ = [int(b, 10) for b in addr.split('.')]
     return "".join(chr(b) for b in bytes_)
+
+
+def ipv6_to_binary(addr):
+    ip = ip_address(addr.decode("utf-8"))
+    return ip.packed
 
 
 def mac_to_binary(addr):
@@ -303,7 +309,7 @@ class P4RuntimeTest(BaseTest):
             rx_inport = struct.unpack("!h", rx_in_port_)[0]
             self.fail(
                 "Wrong packet-in ingress port, expected {} but received was {}"
-                .format(exp_in_port, rx_inport))
+                    .format(exp_in_port, rx_inport))
         rx_pkt = Ether(pkt_in_msg.payload)
         if not match_exp_pkt(exp_pkt, rx_pkt):
             self.fail(
