@@ -51,9 +51,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         const default_action = drop;
     }
 
-    action mark_l3_fwd() {
-        fabric_metadata.is_l3_fwd = true;
-    }
+    action mark_l3_fwd() {}
 
     table l2_my_station {
         key = {
@@ -83,6 +81,46 @@ control FabricIngress (inout parsed_headers_t hdr,
           set_l2_next_hop;
       }
       implementation = ecmp_selector;
+    }
+
+
+    action srv6_end() {
+        hdr.srv6h.segment_left = hdr.srv6h.segment_left - 1;
+        hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
+    }
+
+    action srv6_t_insert() {
+    }
+
+
+    table srv6_my_sid {
+      key = {
+          hdr.ipv6.dst_addr: lpm; //TODO ternary?
+      }
+      actions = {
+          srv6_end;
+      }
+    }
+
+    table srv6_transit {
+      key = {
+          hdr.ipv6.dst_addr: lpm; //TODO ternary?
+          //TODO what other fields do we want to match?
+      }
+      actions = {
+          srv6_t_insert;
+      }
+    }
+
+    action srv6_pop() {
+      hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
+      hdr.srv6h.setInvalid();
+      // Need to set MAX_HOPS headers invalid
+      hdr.srv6_list[0].setInvalid();
+      hdr.srv6_list[1].setInvalid();
+      hdr.srv6_list[2].setInvalid();
+      hdr.srv6_list[3].setInvalid();
+      hdr.srv6_list[4].setInvalid();
     }
 
     // Send immendiatelly to CPU - skip the rest of pipeline.
@@ -115,11 +153,23 @@ control FabricIngress (inout parsed_headers_t hdr,
             hdr.packet_out.setInvalid();
             exit;
         }
-        l2_my_station.apply();
-        if (fabric_metadata.is_l3_fwd) {
-            if (hdr.ipv6.isValid()) {
-                l3_table.apply();
-            }
+        if (l2_my_station.apply().hit) {
+        //if (l2_my_station.apply().action_run) { // can also just use .hit
+           //mark_l3_fwd: {
+              if (hdr.ipv6.isValid()) {
+                  if (hdr.srv6h.isValid()) {
+                      if (srv6_my_sid.apply().hit) {
+                           // PSP logic
+                           if (hdr.srv6h.segment_left == 0) {
+                                srv6_pop();
+                           }
+                      } else {
+                           srv6_transit.apply();
+                      }
+                  }
+                  l3_table.apply();
+              }
+           //}
         }
         l2_table.apply();
         acl.apply();

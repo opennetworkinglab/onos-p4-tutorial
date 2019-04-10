@@ -75,6 +75,20 @@ parser FabricParser (packet_in packet,
     }
     state parse_srv6_list {
         packet.extract(hdr.srv6_list.next);
+        bool next_segment = (bit<32>)hdr.srv6h.segment_left - 1 == (bit<32>)hdr.srv6_list.lastIndex;
+        transition select(next_segment) {
+            true: mark_current_srv6;
+            _: check_last_srv6;
+        }
+    }
+
+    state mark_current_srv6 {
+        // current metadata
+        fabric_metadata.next_srv6_sid = hdr.srv6_list.last.segment_id; 
+        transition check_last_srv6;
+    }
+
+    state check_last_srv6 {
         // working with bit<8> and int<32> which cannot be cast directly; using bit<32> as common intermediate type for comparision
         bool last_segment = (bit<32>)hdr.srv6h.last_entry == (bit<32>)hdr.srv6_list.lastIndex;
         transition select(last_segment) {

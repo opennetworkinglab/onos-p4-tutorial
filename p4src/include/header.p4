@@ -124,6 +124,7 @@ struct fabric_metadata_t {
     _BOOL is_multicast;
     _BOOL clone_to_cpu;
     _BOOL is_l3_fwd;
+    bit<128> next_srv6_sid;
     bit<8> ip_proto;
     bit<16> l4_src_port;
     bit<16> l4_dst_port;
