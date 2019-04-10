@@ -25,7 +25,9 @@
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {
-    //TODO add counters
+    // TODO add counters
+    // TODO add name annotations to avoid using the fully qualified names
+    //  for tables etc.
 
     action drop() {
         mark_to_drop();
@@ -162,6 +164,7 @@ control FabricIngress (inout parsed_headers_t hdr,
             standard_metadata.ingress_port: ternary; // 9
             hdr.ethernet.dst_addr: ternary; // 48
             hdr.ethernet.src_addr: ternary; // 48
+            hdr.ethernet.ether_type: ternary; // 16
             hdr.icmp.icmp_type: ternary; // 8
             hdr.icmp.icmp_code: ternary; // 8
             fabric_metadata.ip_proto: ternary; // 8
