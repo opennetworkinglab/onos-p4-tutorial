@@ -51,28 +51,30 @@ control FabricIngress (inout parsed_headers_t hdr,
         const default_action = drop;
     }
 
-    action mark_l3_fwd() {}
-
     table l2_my_station {
         key = {
             hdr.ethernet.dst_addr: exact;
         }
         actions = {
-            mark_l3_fwd;
+            NoAction;
         }
     }
 
     action set_l2_next_hop(mac_addr_t dmac) {
         //FIXME set smac
         hdr.ethernet.dst_addr = dmac;
+        hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
     }
 
     action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
     table l3_table {
       key = {
           hdr.ipv6.dst_addr: lpm;
+
           hdr.ipv6.dst_addr: selector;
           hdr.ipv6.src_addr: selector;
+          hdr.ipv6.flow_label: selector;
+          // the rest of the 5-tuple is optional per RFC6438
           fabric_metadata.ip_proto: selector;
           fabric_metadata.l4_src_port: selector;
           fabric_metadata.l4_dst_port: selector;
@@ -83,24 +85,59 @@ control FabricIngress (inout parsed_headers_t hdr,
       implementation = ecmp_selector;
     }
 
-
     action srv6_end() {
         hdr.srv6h.segment_left = hdr.srv6h.segment_left - 1;
         hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
     }
 
-    action srv6_t_insert() {
-    }
-
-
     table srv6_my_sid {
       key = {
-          hdr.ipv6.dst_addr: lpm; //TODO ternary?
+          hdr.ipv6.dst_addr: ternary;
       }
       actions = {
           srv6_end;
       }
     }
+
+    action insert_srv6h_header(bit<8> num_segments) {
+        hdr.srv6h.setValid();
+        hdr.srv6h.next_hdr = hdr.ipv6.next_hdr;
+        hdr.srv6h.hdr_ext_len =  num_segments * 2;
+        hdr.srv6h.routing_type = 4;
+        hdr.srv6h.segment_left = num_segments - 1;
+        hdr.srv6h.last_entry = num_segments - 1;
+        hdr.srv6h.flags = 0;
+        hdr.srv6h.tag = 0;
+        hdr.ipv6.next_hdr = PROTO_SRV6;
+    }
+
+    /*
+       Single segment header doesn't make sense given PSP
+       i.e. we will pop the SRv6 header when segments_left reaches 0
+     */
+
+    action srv6_t_insert_2(ipv6_addr_t s1, ipv6_addr_t s2) {
+        hdr.ipv6.dst_addr = s1;
+        hdr.ipv6.payload_len = hdr.ipv6.payload_len + 40;
+        insert_srv6h_header(2);
+        hdr.srv6_list[0].setValid();
+        hdr.srv6_list[0].segment_id = s2;
+        hdr.srv6_list[1].setValid();
+        hdr.srv6_list[1].segment_id = s1;
+    }
+
+    action srv6_t_insert_3(ipv6_addr_t s1, ipv6_addr_t s2, ipv6_addr_t s3) {
+        hdr.ipv6.dst_addr = s1;
+        hdr.ipv6.payload_len = hdr.ipv6.payload_len + 56;
+        insert_srv6h_header(3);
+        hdr.srv6_list[0].setValid();
+        hdr.srv6_list[0].segment_id = s3;
+        hdr.srv6_list[1].setValid();
+        hdr.srv6_list[1].segment_id = s2;
+        hdr.srv6_list[2].setValid();
+        hdr.srv6_list[2].segment_id = s1;
+    }
+
 
     table srv6_transit {
       key = {
@@ -108,19 +145,10 @@ control FabricIngress (inout parsed_headers_t hdr,
           //TODO what other fields do we want to match?
       }
       actions = {
-          srv6_t_insert;
+          srv6_t_insert_2;
+          srv6_t_insert_3;
+          // Extra credit: set a metadata field, then push label stack in egress
       }
-    }
-
-    action srv6_pop() {
-      hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
-      hdr.srv6h.setInvalid();
-      // Need to set MAX_HOPS headers invalid
-      hdr.srv6_list[0].setInvalid();
-      hdr.srv6_list[1].setInvalid();
-      hdr.srv6_list[2].setInvalid();
-      hdr.srv6_list[3].setInvalid();
-      hdr.srv6_list[4].setInvalid();
     }
 
     // Send immendiatelly to CPU - skip the rest of pipeline.
@@ -147,6 +175,15 @@ control FabricIngress (inout parsed_headers_t hdr,
         }
     }
 
+    action srv6_pop() {
+      hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
+      hdr.srv6h.setInvalid();
+      // Need to set MAX_HOPS headers invalid
+      hdr.srv6_list[0].setInvalid();
+      hdr.srv6_list[1].setInvalid();
+      hdr.srv6_list[2].setInvalid();
+    }
+
     apply {
         if (hdr.packet_out.isValid()) {
             standard_metadata.egress_spec = hdr.packet_out.egress_port;
@@ -157,21 +194,24 @@ control FabricIngress (inout parsed_headers_t hdr,
         //if (l2_my_station.apply().action_run) { // can also just use .hit
            //mark_l3_fwd: {
               if (hdr.ipv6.isValid()) {
-                  if (hdr.srv6h.isValid()) {
-                      if (srv6_my_sid.apply().hit) {
-                           // PSP logic
-                           if (hdr.srv6h.segment_left == 0) {
-                                srv6_pop();
-                           }
-                      } else {
-                           srv6_transit.apply();
-                      }
+                  if (srv6_my_sid.apply().hit) {
+                       // PSP logic -- enabled for all packets
+                       if (hdr.srv6h.isValid() && hdr.srv6h.segment_left == 0) {
+                            srv6_pop();
+                       }
+                  } else {
+                       srv6_transit.apply();
                   }
                   l3_table.apply();
+                  if(hdr.ipv6.hop_limit == 0) {
+                      drop();
+                  }
               }
            //}
         }
-        l2_table.apply();
+        if (true) { // FIXME packet not marked drop
+            l2_table.apply();
+        }
         acl.apply();
     }
 }

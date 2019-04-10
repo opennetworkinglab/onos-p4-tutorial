@@ -61,15 +61,16 @@
 #define PKT_INSTANCE_TYPE_REPLICATION 5
 #define PKT_INSTANCE_TYPE_RESUBMIT 6
 
-typedef bit<20> mpls_label_t;
-typedef bit<9>  port_num_t;
-typedef bit<48> mac_addr_t;
-typedef bit<16> group_id_t;
-typedef bit<12> vlan_id_t;
-typedef bit<48> timestamp_t;
-typedef bit<32> switch_id_t;
-typedef bit<32> ipv4_addr_t;
-typedef bit<16> l4_port_t;
+typedef bit<20>  mpls_label_t;
+typedef bit<9>   port_num_t;
+typedef bit<48>  mac_addr_t;
+typedef bit<16>  group_id_t;
+typedef bit<12>  vlan_id_t;
+typedef bit<48>  timestamp_t;
+typedef bit<32>  switch_id_t;
+typedef bit<32>  ipv4_addr_t;
+typedef bit<128> ipv6_addr_t;
+typedef bit<16>  l4_port_t;
 
 const bit<16> ETHERTYPE_QINQ = 0x88A8;
 const bit<16> ETHERTYPE_QINQ_NON_STD = 0x9100;
@@ -83,8 +84,8 @@ const bit<16> ETHERTYPE_ARP  = 0x0806;
 const bit<8> PROTO_ICMP = 1;
 const bit<8> PROTO_TCP = 6;
 const bit<8> PROTO_UDP = 17;
+const bit<8> PROTO_SRV6 = 43;
 const bit<8> PROTO_ICMPV6 = 58;
-const bit<8> PROTO_SRV6 = 123; //FIXME
 
 const bit<4> IPV4_MIN_IHL = 5;
 
