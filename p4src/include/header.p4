@@ -119,11 +119,29 @@ header icmp_t {
     bit<64> timestamp;
 }
 
+header icmpv6_t {
+    bit<8> type;
+    bit<8> code;
+    bit<16> checksum;
+}
+
+header ndp_t {
+    bit<32> flags;
+    bit<128> target_addr;
+}
+
+header ndp_option_t {
+    bit<8> type;
+    bit<8> length;
+    bit<48> value;
+}
+
 //Custom metadata definition
 struct fabric_metadata_t {
     _BOOL is_multicast;
     _BOOL clone_to_cpu;
     _BOOL is_l3_fwd;
+    _BOOL skip_l2;
     ipv6_addr_t next_srv6_sid;
     bit<8> ip_proto;
     l4_port_t l4_src_port;
@@ -140,6 +158,9 @@ struct parsed_headers_t {
     tcp_t tcp;
     udp_t udp;
     icmp_t icmp;
+    icmpv6_t icmpv6;
+    ndp_t ndp;
+    ndp_option_t ndp_option;
     packet_out_header_t packet_out;
     packet_in_header_t packet_in;
 }

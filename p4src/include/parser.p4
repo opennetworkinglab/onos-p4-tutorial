@@ -64,7 +64,7 @@ parser FabricParser (packet_in packet,
         transition select(hdr.ipv6.next_hdr) {
             PROTO_TCP: parse_tcp;
             PROTO_UDP: parse_udp;
-            PROTO_ICMPV6: parse_icmp;
+            PROTO_ICMPV6: parse_icmpv6;
             PROTO_SRV6: parse_srv6;
             default: accept;
         }
@@ -129,6 +129,25 @@ parser FabricParser (packet_in packet,
         transition accept;
     }
 
+    state parse_icmpv6 {
+        packet.extract(hdr.icmpv6);
+        transition select(hdr.icmpv6.type) {
+            ICMP6_TYPE_NS: parse_ndp;
+            ICMP6_TYPE_NA: parse_ndp;
+            default: accept;
+        }
+
+    }
+
+    state parse_ndp {
+        packet.extract(hdr.ndp);
+        transition parse_ndp_option;
+    }
+
+    state parse_ndp_option {
+        packet.extract(hdr.ndp_option);
+        transition accept;
+    }
 }
 
 control FabricDeparser(packet_out packet, in parsed_headers_t hdr) {
@@ -142,6 +161,9 @@ control FabricDeparser(packet_out packet, in parsed_headers_t hdr) {
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);
         packet.emit(hdr.icmp);
+        packet.emit(hdr.icmpv6);
+        packet.emit(hdr.ndp);
+        packet.emit(hdr.ndp_option);
     }
 }
 

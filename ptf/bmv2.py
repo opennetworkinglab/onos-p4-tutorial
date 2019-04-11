@@ -88,8 +88,11 @@ class Bmv2Switch:
         self.is_stratum = is_stratum
         self.debugger = debugger
 
-        if not check_bmv2_target(BMV2_TARGET_EXE):
+        if not is_stratum and not check_bmv2_target(BMV2_TARGET_EXE):
             raise Exception("%s executable not found" % BMV2_TARGET_EXE)
+
+        if is_stratum and not os.path.exists(STRATUM_BINARY):
+            raise Exception("%s executable not found" % STRATUM_BINARY)
 
     def get_stratum_cmd(self, port_map):
         args = [

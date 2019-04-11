@@ -103,4 +103,11 @@ const bit<8> ETH_HEADER_LEN = 14;
 const bit<8> IPV4_MIN_HEAD_LEN = 20;
 const bit<8> UDP_HEADER_LEN = 8;
 
+const bit<8> ICMP6_TYPE_NS = 135;
+const bit<8> ICMP6_TYPE_NA = 136;
+const bit<8> NDP_OPT_TARGET_LL_ADDR = 2;
+const mac_addr_t IPV6_MCAST_01 = 0x33_33_00_00_00_01;
+const bit<32> NDP_FLAG_ROUTER = 0x80000000;
+const bit<32> NDP_FLAG_SOLICITED = 0x40000000;
+const bit<32> NDP_FLAG_OVERRIDE = 0x20000000;
 #endif

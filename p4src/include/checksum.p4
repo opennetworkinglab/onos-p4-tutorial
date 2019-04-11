@@ -20,7 +20,26 @@
 control FabricComputeChecksum(inout parsed_headers_t hdr,
                               inout fabric_metadata_t meta)
 {
-    apply {}
+    apply {
+        update_checksum(hdr.icmpv6.isValid(),
+            {
+                hdr.ipv6.src_addr,
+                hdr.ipv6.dst_addr,
+                hdr.ipv6.payload_len,
+                8w0,
+                hdr.ipv6.next_hdr,
+                hdr.icmpv6.type,
+                hdr.icmpv6.code,
+                hdr.ndp.flags,
+                hdr.ndp.target_addr,
+                hdr.ndp_option.type,
+                hdr.ndp_option.length,
+                hdr.ndp_option.value
+            },
+            hdr.icmpv6.checksum,
+            HashAlgorithm.csum16
+        );
+    }
 }
 
 control FabricVerifyChecksum(inout parsed_headers_t hdr,

@@ -14,23 +14,31 @@
 # limitations under the License.
 #
 
+import struct
+import socket
+
 from p4.v1 import p4runtime_pb2
 from ptf import testutils as testutils
 from ptf.packet import IPv6
 from ptf.testutils import group
 from scapy.layers.inet import IP
 from scapy.layers.l2 import Ether
+from scapy.layers.inet6 import IPv6, ICMPv6ND_NS, ICMPv6ND_NA, ICMPv6NDOptSrcLLAddr, ICMPv6NDOptDstLLAddr
+from scapy.pton_ntop import inet_pton, inet_ntop
+from scapy.utils6 import in6_getnsma, in6_getnsmac
 
 from base_test import P4RuntimeTest, stringify, mac_to_binary, ipv6_to_binary, \
     autocleanup
 
 DEFAULT_PRIORITY = 10
 
-SWITCH_MAC = "00:00:00:00:aa:01"
+IPV6_MCAST_MAC_1 = "33:33:00:00:00:01"
 
+SWITCH_MAC = "00:00:00:00:aa:01"
 HOST1_MAC = "00:00:00:00:00:01"
 HOST2_MAC = "00:00:00:00:00:02"
 
+SWITCH_IPV6 = "2001:0000:85a3::8a2e:370:fffe"
 HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
 HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
 
@@ -155,6 +163,14 @@ class FabricTest(P4RuntimeTest):
             replica.instance = 0
         return req, self.write_request(req)
 
+    def add_ndp_reply_entry(self, target_addr, target_mac):
+        target_addr = inet_pton(socket.AF_INET6, target_addr)
+        target_mac = mac_to_binary(target_mac)
+        mk = [self.Exact("hdr.ndp.target_addr", target_addr)]
+        self.send_request_add_entry_to_action(
+            "FabricIngress.ndp_reply", mk,
+            "FabricIngress.ndp_advertisement", [("router_mac", target_mac)])
+
 
 class FabricBridgingTest(FabricTest):
 
@@ -178,6 +194,32 @@ class FabricBridgingTest(FabricTest):
             pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
                 pktlen=120)
             self.runBridgingTest(pkt)
+
+class FabricNdpReplyTest(FabricTest):
+
+    def GenNdpNsPkt(self, src_mac, src_ip, target_ip):
+        nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
+        d = inet_ntop(socket.AF_INET6, nsma)
+        dm = in6_getnsmac(nsma)
+        p = Ether(dst=dm) / IPv6(dst=d, src=src_ip, hlim=255)
+        p /= ICMPv6ND_NS(tgt=target_ip)
+        p /= ICMPv6NDOptSrcLLAddr(lladdr=src_mac)
+        return p
+
+    def GenNdpNaPkt(self, src_mac, dst_mac, src_ip, dst_ip):
+        p = Ether(src=src_mac, dst=dst_mac)
+        p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
+        p /= ICMPv6ND_NA(tgt=src_ip)
+        p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
+        return p
+
+    @autocleanup
+    def runTest(self):
+        pkt = self.GenNdpNsPkt(HOST1_MAC, HOST1_IPV6, SWITCH_IPV6)
+        pkt_expect = self.GenNdpNaPkt(SWITCH_MAC, IPV6_MCAST_MAC_1, SWITCH_IPV6, HOST1_IPV6)
+        self.add_ndp_reply_entry(SWITCH_IPV6, SWITCH_MAC)
+        testutils.send_packet(self, self.port1, str(pkt))
+        testutils.verify_packet(self, pkt_expect, self.port1)
 
 
 class FabricIPv6UnicastTest(FabricTest):

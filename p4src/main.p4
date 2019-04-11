@@ -33,6 +33,33 @@ control FabricIngress (inout parsed_headers_t hdr,
         mark_to_drop();
     }
 
+    action ndp_advertisement(mac_addr_t router_mac) {
+        hdr.ethernet.src_addr = router_mac;
+        hdr.ethernet.dst_addr = IPV6_MCAST_01;
+        bit<128> host_ipv6_tmp = hdr.ipv6.src_addr;
+        hdr.ipv6.src_addr = hdr.ndp.target_addr;
+        hdr.ipv6.dst_addr = host_ipv6_tmp;
+        hdr.icmpv6.type = ICMP6_TYPE_NA;
+        hdr.ndp.flags = NDP_FLAG_ROUTER | NDP_FLAG_OVERRIDE;
+        hdr.ndp_option.setValid();
+        hdr.ndp_option.type = NDP_OPT_TARGET_LL_ADDR;
+        hdr.ndp_option.length = 1;
+        hdr.ndp_option.value = router_mac;
+        hdr.ipv6.next_hdr = PROTO_ICMPV6;
+        standard_metadata.egress_spec = standard_metadata.ingress_port;
+        fabric_metadata.skip_l2 = true;
+    }
+
+    table ndp_reply {
+        key = {
+            hdr.ndp.target_addr: exact;
+        }
+        actions = {
+            ndp_advertisement;
+        }
+        size = 1;
+    }
+
     action l2_unicast_fwd(port_num_t port_num) {
         standard_metadata.egress_spec = port_num;
     }
@@ -199,6 +226,9 @@ control FabricIngress (inout parsed_headers_t hdr,
             hdr.packet_out.setInvalid();
             exit;
         }
+        if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
+            ndp_reply.apply();
+        }
         if (l2_my_station.apply().hit) {
         //if (l2_my_station.apply().action_run) { // can also just use .hit
            //mark_l3_fwd: {
@@ -218,7 +248,7 @@ control FabricIngress (inout parsed_headers_t hdr,
               }
            //}
         }
-        if (true) { // FIXME packet not marked drop
+        if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) { // FIXME packet not marked drop
             l2_table.apply();
         }
         acl.apply();
