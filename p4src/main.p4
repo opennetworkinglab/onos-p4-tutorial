@@ -39,6 +39,7 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     action l2_multicast_fwd(group_id_t gid) {
         standard_metadata.mcast_grp = gid;
+        fabric_metadata.is_multicast = _TRUE;
     }
 
     table l2_table {
@@ -159,6 +160,11 @@ control FabricIngress (inout parsed_headers_t hdr,
         exit;
     }
 
+    action clone_to_cpu() {
+        // FIXME: works only if pkt will be replicated via PRE multicast group.
+        fabric_metadata.clone_to_cpu = _TRUE;
+    }
+
     table acl {
         key = {
             standard_metadata.ingress_port: ternary; // 9
@@ -173,7 +179,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         }
         actions = {
             punt_to_cpu;
-            //FIXME add clone
+            clone_to_cpu;
             drop;
         }
     }
@@ -224,8 +230,19 @@ control FabricEgress (inout parsed_headers_t hdr,
                       inout standard_metadata_t standard_metadata) {
     apply {
         if (standard_metadata.egress_port == CPU_PORT) {
+            if (fabric_metadata.is_multicast == _TRUE &&
+                fabric_metadata.clone_to_cpu == _FALSE) {
+                // Is multicast but clone was not requested.
+                mark_to_drop();
+            }
+
             hdr.packet_in.setValid();
             hdr.packet_in.ingress_port = standard_metadata.ingress_port;
+        }
+
+        if (fabric_metadata.is_multicast == _TRUE
+             && standard_metadata.ingress_port == standard_metadata.egress_port) {
+            mark_to_drop();
         }
     }
 }
