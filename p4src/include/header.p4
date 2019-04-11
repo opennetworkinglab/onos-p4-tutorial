@@ -135,7 +135,7 @@ struct parsed_headers_t {
     ipv4_t ipv4;
     ipv6_t ipv6;
     srv6h_t srv6h;
-    srv6_list_t[MAX_HOPS] srv6_list; 
+    srv6_list_t[MAX_HOPS] srv6_list;
     arp_t arp;
     tcp_t tcp;
     udp_t udp;

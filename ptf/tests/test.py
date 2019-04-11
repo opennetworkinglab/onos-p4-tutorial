@@ -79,13 +79,25 @@ class FabricTest(P4RuntimeTest):
         self.next_grp_id = self.next_grp_id + 1
         return grp_id
 
-    def add_l2_entry(self, eth_dstAddr, out_port):
+    def add_l2_unicast_entry(self, eth_dstAddr, out_port):
+        out_port_ = stringify(out_port, 2)
+        self.add_l2_entry(
+            eth_dstAddr,
+            ["FabricIngress.l2_unicast_fwd", [("port_num", out_port_)]])
+
+    def add_l2_multicast_entry(self, eth_dstAddr, out_ports):
+        grp_id = self.get_next_grp_id()
+        grp_id_ = stringify(grp_id, 2)
+        self.add_mcast_group(grp_id, out_ports)
+        self.add_l2_entry(
+            eth_dstAddr,
+            ["FabricIngress.l2_multicast_fwd", [("gid", grp_id_)]])
+
+    def add_l2_entry(self, eth_dstAddr, action):
         eth_dstAddr_ = mac_to_binary(eth_dstAddr)
         mk = [self.Exact("hdr.ethernet.dst_addr", eth_dstAddr_)]
-        out_port_ = stringify(out_port, 2)
         self.send_request_add_entry_to_action(
-            "FabricIngress.l2_table", mk,
-            "FabricIngress.l2_unicast_fwd", [("port_num", out_port_)])
+            "FabricIngress.l2_table", mk, *action)
 
     def add_l2_my_station_entry(self, eth_dstAddr):
         eth_dstAddr_ = mac_to_binary(eth_dstAddr)
@@ -151,8 +163,8 @@ class FabricBridgingTest(FabricTest):
         mac_src = pkt[Ether].src
         mac_dst = pkt[Ether].dst
         # miss on filtering.fwd_classifier => bridging
-        self.add_l2_entry(mac_dst, self.port2)
-        self.add_l2_entry(mac_src, self.port1)
+        self.add_l2_unicast_entry(mac_dst, self.port2)
+        self.add_l2_unicast_entry(mac_src, self.port1)
         pkt2 = pkt_mac_swap(pkt.copy())
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.send_packet(self, self.port2, str(pkt2))
@@ -176,7 +188,7 @@ class FabricIPv6UnicastTest(FabricTest):
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
         self.add_l2_my_station_entry(pkt[Ether].dst)
         self.add_l3_ecmp_entry(pkt[IPv6].dst, prefix_len, [next_hop_mac])
-        self.add_l2_entry(next_hop_mac, self.port2)
+        self.add_l2_unicast_entry(next_hop_mac, self.port2)
         exp_pkt = pkt.copy()
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
@@ -241,44 +253,25 @@ class FabricPacketInTest(FabricTest):
             pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
             self.runPacketInTest(pkt)
 
-# class ArpBroadcastTest(FabricTest):
-#     def runArpBroadcastTest(self, tagged_ports, untagged_ports):
-#         zero_mac_addr = ":".join(["00"] * 6)
-#         vlan_id = 10
-#         next_id = vlan_id
-#         mcast_group_id = vlan_id
-#         all_ports = tagged_ports + untagged_ports
-#         arp_pkt = testutils.simple_arp_packet(pktlen=MIN_PKT_LEN - 4)
-#         # Account for VLAN header size in total pktlen
-#         vlan_arp_pkt = testutils.simple_arp_packet(vlan_vid=vlan_id,
-#                                                    pktlen=MIN_PKT_LEN)
-#
-#         self.add_l2_entry(vlan_id, zero_mac_addr, zero_mac_addr, next_id)
-#         self.add_acl_cpu_entry(eth_type=ETH_TYPE_ARP, clone=True)
-#         self.add_next_multicast(next_id, mcast_group_id)
-#         # FIXME: use clone session APIs when supported on PI
-#         # For now we add the CPU port to the mc group.
-#         self.add_mcast_group(mcast_group_id, all_ports + [self.cpu_port])
-#
-#         for inport in all_ports:
-#             pkt_to_send = vlan_arp_pkt if inport in tagged_ports else arp_pkt
-#             testutils.send_packet(self, inport, str(pkt_to_send))
-#             # Pkt should be received on CPU and on all ports, except the ingress one.
-#             self.verify_packet_in(exp_pkt=pkt_to_send, exp_in_port=inport)
-#             verify_tagged_ports = set(tagged_ports)
-#             verify_tagged_ports.discard(inport)
-#             for tport in verify_tagged_ports:
-#                 testutils.verify_packet(self, vlan_arp_pkt, tport)
-#             verify_untagged_ports = set(untagged_ports)
-#             verify_untagged_ports.discard(inport)
-#             for uport in verify_untagged_ports:
-#                 testutils.verify_packet(self, arp_pkt, uport)
-#         testutils.verify_no_other_packets(self)
-#
-# @group("multicast")
-# class FabricArpBroadcastUntaggedTest(ArpBroadcastTest):
-#     @autocleanup
-#     def runTest(self):
-#         self.runArpBroadcastTest(
-#             tagged_ports=[],
-#             untagged_ports=[self.port1, self.port2, self.port3])
+
+class FabricArpBroadcastWithCloneTest(FabricTest):
+
+    @autocleanup
+    def runTest(self):
+        ports = [self.port1, self.port2, self.port3]
+        pkt = testutils.simple_arp_packet()
+        # FIXME: use clone session APIs when supported on PI
+        # For now we add the CPU port to the mc group.
+        self.add_l2_multicast_entry(pkt[Ether].dst, ports + [self.cpu_port])
+        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+
+        for inport in ports:
+            testutils.send_packet(self, inport, str(pkt))
+            # Pkt should be received on CPU and on all ports
+            # except the ingress one.
+            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
+            verify_ports = set(ports)
+            verify_ports.discard(inport)
+            for port in verify_ports:
+                testutils.verify_packet(self, pkt, port)
+        testutils.verify_no_other_packets(self)
