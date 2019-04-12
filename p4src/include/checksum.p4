@@ -21,7 +21,7 @@ control FabricComputeChecksum(inout parsed_headers_t hdr,
                               inout fabric_metadata_t meta)
 {
     apply {
-        update_checksum(hdr.icmpv6.isValid(),
+        update_checksum(hdr.ndp.isValid(),
             {
                 hdr.ipv6.src_addr,
                 hdr.ipv6.dst_addr,

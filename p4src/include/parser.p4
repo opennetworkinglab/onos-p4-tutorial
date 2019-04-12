@@ -92,8 +92,8 @@ parser FabricParser (packet_in packet,
         // working with bit<8> and int<32> which cannot be cast directly; using bit<32> as common intermediate type for comparision
         bool last_segment = (bit<32>)hdr.srv6h.last_entry == (bit<32>)hdr.srv6_list.lastIndex;
         transition select(last_segment) {
-           false: parse_srv6_next_hdr;
-           true: parse_srv6_list;    
+           true: parse_srv6_next_hdr;
+           false: parse_srv6_list;
         } 
     }
     state parse_srv6_next_hdr {
@@ -157,7 +157,8 @@ control FabricDeparser(packet_out packet, in parsed_headers_t hdr) {
         packet.emit(hdr.arp);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.ipv6);
-        //FIXME emit SR
+        packet.emit(hdr.srv6h);
+        packet.emit(hdr.srv6_list);
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);
         packet.emit(hdr.icmp);

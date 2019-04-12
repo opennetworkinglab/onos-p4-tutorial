@@ -213,6 +213,12 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     action srv6_pop() {
       hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
+      // SRv6 header is 8 bytes
+      // SRv6 list entry is 16 bytes each
+      // (((bit<16>)hdr.srv6h.last_entry + 1) * 16) + 8;
+      bit<16> srv6h_size = (((bit<16>)hdr.srv6h.last_entry + 1) << 4) + 8;
+      hdr.ipv6.payload_len = hdr.ipv6.payload_len - srv6h_size;
+
       hdr.srv6h.setInvalid();
       // Need to set MAX_HOPS headers invalid
       hdr.srv6_list[0].setInvalid();
