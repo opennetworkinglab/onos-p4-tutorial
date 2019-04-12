@@ -8,4 +8,5 @@ public class AppConstants {
     public static final PiPipeconfId SRV6_PIPECONF_ID = new PiPipeconfId("org.p4.srv6-tutorial");
 
     public static final int DEFAULT_FLOW_RULE_PRIORITY = 10;
+    public static final int INITIAL_SETUP_DELAY = 5; // Seconds.
 }

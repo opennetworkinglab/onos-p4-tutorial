@@ -57,7 +57,6 @@ control FabricIngress (inout parsed_headers_t hdr,
         actions = {
             ndp_advertisement;
         }
-        size = 1;
     }
 
     action l2_unicast_fwd(port_num_t port_num) {

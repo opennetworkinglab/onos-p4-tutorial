@@ -1,12 +1,32 @@
 {
   "devices": {
-    "device:leaf1": {
+    "device:bmv2:leaf1": {
+      "srv6DeviceConfig": {
+        "myStationMac": "00:aa:00:00:00:01",
+        "mySid": "2001::1",
+        "isSpine": false
+      }
     },
-    "device:leaf2": {
+    "device:bmv2:leaf2": {
+      "srv6DeviceConfig": {
+        "myStationMac": "00:aa:00:00:00:02",
+        "mySid": "2001::2",
+        "isSpine": false
+      }
     },
-    "device:spine1": {
+    "device:bmv2:spine1": {
+      "srv6DeviceConfig": {
+        "myStationMac": "00:bb:00:00:00:01",
+        "mySid": "2002::1",
+        "isSpine": true
+      }
     },
-    "device:spine2": {
+    "device:bmv2:spine2": {
+      "srv6DeviceConfig": {
+        "myStationMac": "00:bb:00:00:00:02",
+        "mySid": "2002::2",
+        "isSpine": true
+      }
     }
   },
   "hosts": {
@@ -42,5 +62,53 @@
     }
   },
   "ports": {
+    "device:bmv2:leaf1/3": {
+      "interfaces": [
+        {
+          "name": "leaf1-3",
+          "ips": ["2001:1:1::ff/64"]
+        }
+      ]
+    },
+    "device:bmv2:leaf1/4": {
+      "interfaces": [
+        {
+          "name": "leaf1-4",
+          "ips": ["2001:1:1::ff/64"]
+        }
+      ]
+    },
+    "device:bmv2:leaf1/5": {
+      "interfaces": [
+        {
+          "name": "leaf1-5",
+          "ips": ["2001:1:1::ff/64"]
+        }
+      ]
+    },
+    "device:bmv2:leaf1/6": {
+      "interfaces": [
+        {
+          "name": "leaf1-6",
+          "ips": ["2001:1:2::ff/64"]
+        }
+      ]
+    },
+    "device:bmv2:leaf2/3": {
+      "interfaces": [
+        {
+          "name": "leaf2-3",
+          "ips": ["2001:1:3::ff/64"]
+        }
+      ]
+    },
+    "device:bmv2:leaf2/4": {
+      "interfaces": [
+        {
+          "name": "leaf2-4",
+          "ips": ["2001:1:4::ff/64"]
+        }
+      ]
+    }
   }
 }

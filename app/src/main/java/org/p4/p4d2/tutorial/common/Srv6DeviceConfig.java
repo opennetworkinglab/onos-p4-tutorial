@@ -26,6 +26,7 @@ import org.onosproject.net.config.Config;
  */
 public class Srv6DeviceConfig extends Config<DeviceId> {
 
+    public static final String CONFIG_KEY = "srv6DeviceConfig";
     private static final String MY_STATION_MAC = "myStationMac";
     private static final String MY_SID = "mySid";
     private static final String IS_SPINE = "isSpine";

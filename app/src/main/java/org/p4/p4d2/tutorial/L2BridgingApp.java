@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2019-present Open Networking Foundation
  *
@@ -58,6 +57,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.p4.p4d2.tutorial.AppConstants.APP_PREFIX;
+import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 @Component(immediate = true)
 public class L2BridgingApp {
@@ -66,7 +66,6 @@ public class L2BridgingApp {
 
     private static final String APP_NAME = APP_PREFIX + ".l2bridging";
 
-    private static final int INITIAL_SETUP_DELAY = 5; // Seconds.
     private static final int DEFAULT_BROADCAST_GROUP_ID = 255;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)

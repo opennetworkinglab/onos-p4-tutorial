@@ -53,6 +53,8 @@ public final class P4InfoConstants {
             PiMatchFieldId.of("hdr.ethernet.dst_addr");
     public static final PiMatchFieldId HDR_ICMP_ICMP_CODE =
             PiMatchFieldId.of("hdr.icmp.icmp_code");
+    public static final PiMatchFieldId HDR_NDP_TARGET_ADDR =
+            PiMatchFieldId.of("hdr.ndp.target_addr");
     // Table IDs
     public static final PiTableId FABRIC_INGRESS_L3_TABLE =
             PiTableId.of("FabricIngress.l3_table");
@@ -68,6 +70,9 @@ public final class P4InfoConstants {
             PiTableId.of("FabricIngress.srv6_my_sid");
     public static final PiTableId FABRIC_INGRESS_ACL =
             PiTableId.of("FabricIngress.acl");
+    public static final PiTableId FABRIC_INGRESS_NDP_REPLY =
+            PiTableId.of("FabricIngress.ndp_reply");
+
     // Action IDs
     public static final PiActionId FABRIC_INGRESS_SRV6_END =
             PiActionId.of("FabricIngress.srv6_end");
@@ -92,6 +97,9 @@ public final class P4InfoConstants {
             PiActionId.of("FabricIngress.srv6_t_insert_2");
     public static final PiActionId FABRIC_INGRESS_L2_MULTICAST_FWD =
             PiActionId.of("FabricIngress.l2_multicast_fwd");
+    public static final PiActionId FABRIC_INGRESS_NDP_ADVERTISEMENT =
+            PiActionId.of("FabricIngress.ndp_advertisement");
+
     // Action Param IDs
     public static final PiActionParamId DMAC = PiActionParamId.of("dmac");
     public static final PiActionParamId S3 = PiActionParamId.of("s3");
@@ -100,6 +108,7 @@ public final class P4InfoConstants {
     public static final PiActionParamId PORT_NUM =
             PiActionParamId.of("port_num");
     public static final PiActionParamId GID = PiActionParamId.of("gid");
+    public static final PiActionParamId ROUTER_MAC = PiActionParamId.of("router_mac");
     // Action Profile IDs
     public static final PiActionProfileId FABRIC_INGRESS_ECMP_SELECTOR =
             PiActionProfileId.of("FabricIngress.ecmp_selector");
