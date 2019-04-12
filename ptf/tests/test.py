@@ -21,9 +21,8 @@ from p4.v1 import p4runtime_pb2
 from ptf import testutils as testutils
 from ptf.packet import IPv6
 from ptf.testutils import group
-from scapy.layers.inet import IP
-from scapy.layers.l2 import Ether
-from scapy.layers.inet6 import IPv6, ICMPv6ND_NS, ICMPv6ND_NA, ICMPv6NDOptSrcLLAddr, ICMPv6NDOptDstLLAddr
+
+from scapy.layers.all import *
 from scapy.pton_ntop import inet_pton, inet_ntop
 from scapy.utils6 import in6_getnsma, in6_getnsmac
 
@@ -34,11 +33,15 @@ DEFAULT_PRIORITY = 10
 
 IPV6_MCAST_MAC_1 = "33:33:00:00:00:01"
 
-SWITCH_MAC = "00:00:00:00:aa:01"
+SWITCH1_MAC = "00:00:00:00:aa:01"
+SWITCH2_MAC = "00:00:00:00:aa:02"
+SWITCH3_MAC = "00:00:00:00:aa:03"
 HOST1_MAC = "00:00:00:00:00:01"
 HOST2_MAC = "00:00:00:00:00:02"
 
-SWITCH_IPV6 = "2001:0000:85a3::8a2e:370:fffe"
+SWITCH1_IPV6 = "2001:0:1::1"
+SWITCH2_IPV6 = "2001:0:2::1"
+SWITCH3_IPV6 = "2001:0:3::1"
 HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
 HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
 
@@ -171,6 +174,33 @@ class FabricTest(P4RuntimeTest):
             "FabricIngress.ndp_reply", mk,
             "FabricIngress.ndp_advertisement", [("router_mac", target_mac)])
 
+    def add_srv6_transit_2segment_entry(self, dst_ip, prefix_len, s1_ip, s2_ip):
+                self.send_request_add_entry_to_action(
+            "FabricIngress.srv6_transit",
+            [self.Lpm("hdr.ipv6.dst_addr", ipv6_to_binary(dst_ip), prefix_len)],
+            "FabricIngress.srv6_t_insert_2",
+            [("s1", ipv6_to_binary(s1_ip)), ("s2", ipv6_to_binary(s2_ip))]
+        )
+
+    def add_srv6_transit_3segment_entry(self, dst_ip, prefix_len, s1_ip, s2_ip, s3_ip):
+        self.send_request_add_entry_to_action(
+            "FabricIngress.srv6_transit",
+            [self.Lpm("hdr.ipv6.dst_addr", ipv6_to_binary(dst_ip), prefix_len)],
+            "FabricIngress.srv6_t_insert_3",
+            [("s1", ipv6_to_binary(s1_ip)), ("s2", ipv6_to_binary(s2_ip)),
+             ("s3", ipv6_to_binary(s3_ip))]
+        )
+
+    def add_srv6_my_sid_entry(self, my_sid):
+        mask = stringify(0xffffffffffffffffffffffffffffffff, 2)
+        self.send_request_add_entry_to_action(
+            "FabricIngress.srv6_my_sid",
+            [self.Ternary("hdr.ipv6.dst_addr", ipv6_to_binary(my_sid), mask)],
+            "FabricIngress.srv6_end",
+            [],
+            DEFAULT_PRIORITY
+        )
+
 
 class FabricBridgingTest(FabricTest):
 
@@ -215,9 +245,9 @@ class FabricNdpReplyTest(FabricTest):
 
     @autocleanup
     def runTest(self):
-        pkt = self.GenNdpNsPkt(HOST1_MAC, HOST1_IPV6, SWITCH_IPV6)
-        pkt_expect = self.GenNdpNaPkt(SWITCH_MAC, IPV6_MCAST_MAC_1, SWITCH_IPV6, HOST1_IPV6)
-        self.add_ndp_reply_entry(SWITCH_IPV6, SWITCH_MAC)
+        pkt = self.GenNdpNsPkt(HOST1_MAC, HOST1_IPV6, SWITCH1_IPV6)
+        pkt_expect = self.GenNdpNaPkt(SWITCH1_MAC, IPV6_MCAST_MAC_1, SWITCH1_IPV6, HOST1_IPV6)
+        self.add_ndp_reply_entry(SWITCH1_IPV6, SWITCH1_MAC)
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, pkt_expect, self.port1)
 
@@ -242,10 +272,165 @@ class FabricIPv6UnicastTest(FabricTest):
         for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
             print "Testing %s packet..." % pkt_type
             pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
-                eth_src=HOST1_MAC, eth_dst=SWITCH_MAC,
+                eth_src=HOST1_MAC, eth_dst=SWITCH1_MAC,
                 ipv6_src=HOST1_IPV6, ipv6_dst=HOST2_IPV6
             )
             self.doRunTest(pkt, HOST2_MAC)
+
+@group("srv6")
+class FabricSrv6InsertTest(FabricTest):
+    '''
+    l2_my_station -> srv6_transit -> l3_table -> l2_table
+    '''
+
+    @autocleanup
+    def doRunTest(self, pkt, sid_list):
+        sid_len = len(sid_list)
+        if IPv6 not in pkt or Ether not in pkt:
+            self.fail("Cannot do IPv6 test with packet that is not IPv6")
+        self.add_l2_my_station_entry(SWITCH1_MAC)
+        getattr(self, "add_srv6_transit_%dsegment_entry" % sid_len)(pkt[IPv6].dst, 128, *sid_list)
+        self.add_l3_ecmp_entry(sid_list[0], 128, [SWITCH2_MAC])
+        self.add_l2_unicast_entry(SWITCH2_MAC, self.port2)
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        exp_pkt = Ether(src=SWITCH1_MAC, dst=SWITCH2_MAC)
+        exp_pkt /= IPv6(dst=sid_list[0], src=pkt[IPv6].src, hlim=63)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6].nh,
+                                            addresses=sid_list[::-1],
+                                            len=sid_len * 2, segleft=sid_len - 1, lastentry=sid_len - 1)
+        exp_pkt /= pkt[IPv6].payload
+
+        if ICMPv6EchoRequest in exp_pkt:
+            # FIXME: the P4 pipeline should calculate correct ICMPv6 checksum
+            exp_pkt[ICMPv6EchoRequest].cksum = pkt[ICMPv6EchoRequest].cksum
+        testutils.verify_packet(self, exp_pkt, self.port2)
+
+    def runTest(self):
+        sid_lists = (
+            [SWITCH2_IPV6, SWITCH3_IPV6, HOST2_IPV6],
+            [SWITCH3_IPV6, HOST2_IPV6],
+        )
+        for sid_list in sid_lists:
+            for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
+                print "Testing %s packet with %d segments ..." % (pkt_type, len(sid_list))
+                pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
+                    eth_src=HOST1_MAC, eth_dst=SWITCH1_MAC,
+                    ipv6_src=HOST1_IPV6, ipv6_dst=HOST2_IPV6
+                )
+                self.doRunTest(pkt, sid_list)
+
+@group("srv6")
+class FabricSrv6TransitTest(FabricTest):
+    '''
+    l2_my_station -> l3_table -> l2_table
+    No changes to SRH header
+    '''
+
+    @autocleanup
+    def doRunTest(self, pkt):
+        if IPv6 not in pkt or Ether not in pkt:
+            self.fail("Cannot do IPv6 test with packet that is not IPv6")
+
+        self.add_l2_my_station_entry(SWITCH2_MAC)
+        self.add_srv6_my_sid_entry(SWITCH2_IPV6)
+        self.add_l3_ecmp_entry(SWITCH3_IPV6, 128, [SWITCH3_MAC])
+        self.add_l2_unicast_entry(SWITCH3_MAC, self.port2)
+
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        exp_pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
+        exp_pkt /= IPv6(dst=SWITCH3_IPV6, src=pkt[IPv6].src, hlim=63)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6ExtHdrSegmentRouting].nh,
+                                            addresses=[HOST2_IPV6, SWITCH3_IPV6],
+                                            len=2 * 2, segleft=1, lastentry=1)
+        exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
+
+        testutils.verify_packet(self, exp_pkt, self.port2)
+
+    def runTest(self):
+        pkt = Ether(src=SWITCH1_MAC, dst=SWITCH2_MAC)
+        pkt /= IPv6(dst=SWITCH3_IPV6, src=HOST1_IPV6, hlim=64)
+        pkt /= IPv6ExtHdrSegmentRouting(nh=6,
+                                        addresses=[HOST2_IPV6, SWITCH3_IPV6],
+                                        len=2 * 2, segleft=1, lastentry=1)
+        pkt /= TCP()
+
+        self.doRunTest(pkt)
+
+
+@group("srv6")
+class FabricSrv6EndTest(FabricTest):
+    '''
+    l2_my_station -> my_sid -> l3_table -> l2_table
+    Decrement SRH SL (after transform SL > 0)
+    '''
+
+    @autocleanup
+    def doRunTest(self, pkt):
+        if IPv6 not in pkt or Ether not in pkt:
+            self.fail("Cannot do IPv6 test with packet that is not IPv6")
+
+        self.add_l2_my_station_entry(SWITCH2_MAC)
+        self.add_srv6_my_sid_entry(SWITCH2_IPV6)
+        self.add_l3_ecmp_entry(SWITCH3_IPV6, 128, [SWITCH3_MAC])
+        self.add_l2_unicast_entry(SWITCH3_MAC, self.port2)
+
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        exp_pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
+        exp_pkt /= IPv6(dst=SWITCH3_IPV6, src=pkt[IPv6].src, hlim=63)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6ExtHdrSegmentRouting].nh,
+                                            addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+                                            len=3 * 2, segleft=1, lastentry=2)
+        exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
+
+        testutils.verify_packet(self, exp_pkt, self.port2)
+
+    def runTest(self):
+        pkt = Ether(src=SWITCH1_MAC, dst=SWITCH2_MAC)
+        pkt /= IPv6(dst=SWITCH2_IPV6, src=HOST1_IPV6, hlim=64)
+        pkt /= IPv6ExtHdrSegmentRouting(nh=6,
+                                        addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+                                        len=3 * 2, segleft=2, lastentry=2)
+        pkt /= TCP()
+
+        self.doRunTest(pkt)
+
+@group("srv6")
+class FabricSrv6EndPspTest(FabricTest):
+    '''
+    l2_my_station -> my_sid -> l3_table -> l2_table
+    Decrement SRH SL (after transform SL == 0)
+    '''
+
+    @autocleanup
+    def doRunTest(self, pkt):
+        if IPv6 not in pkt or Ether not in pkt:
+            self.fail("Cannot do IPv6 test with packet that is not IPv6")
+
+        self.add_l2_my_station_entry(SWITCH3_MAC)
+        self.add_srv6_my_sid_entry(SWITCH3_IPV6)
+        self.add_l3_ecmp_entry(HOST2_IPV6, 128, [HOST2_MAC])
+        self.add_l2_unicast_entry(HOST2_MAC, self.port2)
+
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        exp_pkt = Ether(src=SWITCH3_MAC, dst=HOST2_MAC)
+        exp_pkt /= IPv6(dst=HOST2_IPV6, src=pkt[IPv6].src, hlim=63, nh=pkt[IPv6ExtHdrSegmentRouting].nh)
+        exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
+
+        testutils.verify_packet(self, exp_pkt, self.port2)
+
+    def runTest(self):
+        pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
+        pkt /= IPv6(dst=SWITCH3_IPV6, src=HOST1_IPV6, hlim=64)
+        pkt /= IPv6ExtHdrSegmentRouting(nh=6,
+                                        addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+                                        len=3 * 2, segleft=1, lastentry=2)
+        pkt /= TCP()
+
+        self.doRunTest(pkt)
 
 
 @group("packetio")
