@@ -1,0 +1,46 @@
+{
+  "devices": {
+    "device:leaf1": {
+    },
+    "device:leaf2": {
+    },
+    "device:spine1": {
+    },
+    "device:spine2": {
+    }
+  },
+  "hosts": {
+    "00:00:00:00:00:1A/None": {
+      "basic": {
+        "name": "h1a"
+      }
+    },
+    "00:00:00:00:00:1B/None": {
+      "basic": {
+        "name": "h1b"
+      }
+    },
+    "00:00:00:00:00:1C/None": {
+      "basic": {
+        "name": "h1c"
+      }
+    },
+    "00:00:00:00:00:20/None": {
+      "basic": {
+        "name": "h2"
+      }
+    },
+    "00:00:00:00:00:30/None": {
+      "basic": {
+        "name": "h3"
+      }
+    },
+    "00:00:00:00:00:40/None": {
+      "basic": {
+        "name": "h4"
+      }
+    }
+  },
+  "ports": {
+  }
+}
