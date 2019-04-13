@@ -37,6 +37,7 @@ import java.net.URL;
 
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.BMV2_JSON;
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.P4_INFO_TEXT;
+import static org.p4.p4d2.tutorial.AppConstants.SRV6_PIPECONF_ID;
 
 /**
  * Component that builds and register the pipeconf at app activation.
@@ -46,7 +47,6 @@ public final class PipeconfLoader {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    public static final PiPipeconfId SRV6_PIPECONF_ID = new PiPipeconfId("org.p4.srv6-tutorial");
     private static final String P4INFO_PATH = "/p4info.txt";
     private static final String BMV2_JSON_PATH = "/bmv2.json";
 

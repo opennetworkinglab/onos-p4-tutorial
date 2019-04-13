@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.p4.p4d2.tutorial;
+package org.p4.p4d2.tutorial.common;
 
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.DeviceId;
