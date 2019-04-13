@@ -60,6 +60,8 @@ public final class P4InfoConstants {
             PiTableId.of("FabricIngress.srv6_transit");
     public static final PiTableId FABRIC_INGRESS_L2_TABLE =
             PiTableId.of("FabricIngress.l2_table");
+    public static final PiTableId FABRIC_INGRESS_L2_BROADCAST_TABLE =
+            PiTableId.of("FabricIngress.l2_broadcast_table");
     public static final PiTableId FABRIC_INGRESS_L2_MY_STATION =
             PiTableId.of("FabricIngress.l2_my_station");
     public static final PiTableId FABRIC_INGRESS_SRV6_MY_SID =
@@ -77,6 +79,8 @@ public final class P4InfoConstants {
             PiActionId.of("FabricIngress.punt_to_cpu");
     public static final PiActionId FABRIC_INGRESS_L2_UNICAST_FWD =
             PiActionId.of("FabricIngress.l2_unicast_fwd");
+    public static final PiActionId FABRIC_INGRESS_L2_BROADCAST_FWD =
+            PiActionId.of("FabricIngress.l2_broadcast_fwd");
     public static final PiActionId FABRIC_INGRESS_SRV6_T_INSERT_3 =
             PiActionId.of("FabricIngress.srv6_t_insert_3");
     public static final PiActionId NO_ACTION = PiActionId.of("NoAction");

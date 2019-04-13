@@ -75,6 +75,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         implements PiPipelineInterpreter {
 
     private static final int PORT_BITWIDTH = 9;
+    private static final int CPU_PORT_ID = 255;
 
     private static final ImmutableBiMap<Criterion.Type, PiMatchFieldId> CRITERION_MAP =
             new ImmutableBiMap.Builder<Criterion.Type, PiMatchFieldId>()
@@ -106,9 +107,12 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
             case OUTPUT:
                 PortNumber port = ((OutputInstruction) instruction).port();
                 if (port.equals(CONTROLLER)) {
-                    final PiActionId actionId = treatment.clearedDeferred()
-                            ? FABRIC_INGRESS_PUNT_TO_CPU
-                            : FABRIC_INGRESS_CLONE_TO_CPU;
+                    // FIXME: modify hostprovider and packet requests to install
+                    //  clone to CPU rules.
+                    final PiActionId actionId = FABRIC_INGRESS_CLONE_TO_CPU;
+                    // final PiActionId actionId = treatment.clearedDeferred()
+                    //         ? FABRIC_INGRESS_PUNT_TO_CPU
+                    //         : FABRIC_INGRESS_CLONE_TO_CPU;
                     return PiAction.builder().withId(actionId).build();
                 }
                 break;
@@ -209,6 +213,15 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         } catch (ImmutableByteSequence.ByteSequenceTrimException e) {
             throw new PiInterpreterException(format(
                     "Port number %d too big, %s", portNumber, e.getMessage()));
+        }
+    }
+
+    @Override
+    public Optional<Integer> mapLogicalPortNumber(PortNumber port) {
+        if (CONTROLLER.equals(port)) {
+            return Optional.of(CPU_PORT_ID);
+        } else {
+            return Optional.empty();
         }
     }
 

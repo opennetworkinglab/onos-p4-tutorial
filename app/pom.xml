@@ -20,7 +20,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.p4</groupId>
-    <artifactId>p4d2-srv6-tutorial</artifactId>
+    <artifactId>srv6-tutorial</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
@@ -30,7 +30,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <onos.version>2.1.0-SNAPSHOT</onos.version>
-        <onos.app.name>org.p4.p4d2-srv6-tutorial</onos.app.name>
+        <onos.app.name>org.p4.srv6-tutorial</onos.app.name>
         <onos.app.title>P4D2 SRv6 Tutorial App</onos.app.title>
         <onos.app.origin>p4.org</onos.app.origin>
         <onos.app.category>Traffic Steering</onos.app.category>

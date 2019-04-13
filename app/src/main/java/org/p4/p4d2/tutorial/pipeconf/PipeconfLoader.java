@@ -46,19 +46,24 @@ public final class PipeconfLoader {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    public static final PiPipeconfId SRV6_PIPECONF_ID = new PiPipeconfId("org.p4.p4d2-srv6-tutorial");
+    public static final PiPipeconfId SRV6_PIPECONF_ID = new PiPipeconfId("org.p4.srv6-tutorial");
     private static final String P4INFO_PATH = "/p4info.txt";
     private static final String BMV2_JSON_PATH = "/bmv2.json";
 
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private PiPipeconfService piPipeconfService;
+    private PiPipeconfService pipeconfService;
 
     @Activate
     public void activate() {
         // Registers the pipeconf at component activation.
+        if (pipeconfService.getPipeconf(SRV6_PIPECONF_ID).isPresent()) {
+            // Remove first if already registered, to support reloading of the
+            // pipeconf during the tutorial.
+            pipeconfService.remove(SRV6_PIPECONF_ID);
+        }
         try {
-            piPipeconfService.register(buildPipeconf());
+            pipeconfService.register(buildPipeconf());
         } catch (P4InfoParserException e) {
             log.error("Unable to register " + SRV6_PIPECONF_ID, e);
         }
@@ -66,12 +71,7 @@ public final class PipeconfLoader {
 
     @Deactivate
     public void deactivate() {
-        // Unregisters the pipeconf at component deactivation.
-        try {
-            piPipeconfService.remove(SRV6_PIPECONF_ID);
-        } catch (IllegalStateException e) {
-            log.warn("{} was not registered", SRV6_PIPECONF_ID);
-        }
+        // Do nothing.
     }
 
     private PiPipeconf buildPipeconf() throws P4InfoParserException {
