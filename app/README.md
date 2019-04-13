@@ -22,10 +22,13 @@ mvn clean install
 
 ## Load the app in ONOS
 
-Once ONOS is running, you can load the app using the following command:
+Once ONOS is running, you can build and load the app using the following 
+command:
 
 ```bash
-onos-app $OCI reinstall! target/p4d2-srv6-tutorial-1.0-SNAPSHOT
+export OCI="<onos-ip-addr>"
+make load
 ```
 
-Where `$OCI` is the address of an ONOS instance.
+Where the `$OCI` env is the address of any ONOS instance. This will uninstall
+and install again  the app if already running.

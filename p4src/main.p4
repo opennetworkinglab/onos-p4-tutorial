@@ -69,16 +69,32 @@ control FabricIngress (inout parsed_headers_t hdr,
         fabric_metadata.is_multicast = _TRUE;
     }
 
+    direct_counter(CounterType.packets_and_bytes) l2_table_counter;
+
     table l2_table {
         key = {
             hdr.ethernet.dst_addr: exact;
         }
         actions = {
             l2_unicast_fwd;
+            @defaultonly NoAction;
+        }
+        const default_action = NoAction;
+        counters = l2_table_counter;
+    }
+
+    direct_counter(CounterType.packets_and_bytes) l2_broadcast_table_counter;
+
+    table l2_broadcast_table {
+        key = {
+            hdr.ethernet.dst_addr: ternary;
+        }
+        actions = {
             l2_multicast_fwd;
             drop;
         }
         const default_action = drop;
+        counters = l2_broadcast_table_counter;
     }
 
     table l2_my_station {
@@ -236,7 +252,7 @@ control FabricIngress (inout parsed_headers_t hdr,
             ndp_reply.apply();
         }
         if (l2_my_station.apply().hit) {
-        //if (l2_my_station.apply().action_run) { // can also just use .hit
+        //switch (l2_my_station.apply().action_run) { // can also just use .hit
            //mark_l3_fwd: {
               if (hdr.ipv6.isValid()) {
                   if (srv6_my_sid.apply().hit) {
@@ -255,7 +271,9 @@ control FabricIngress (inout parsed_headers_t hdr,
            //}
         }
         if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) { // FIXME packet not marked drop
-            l2_table.apply();
+            if (!l2_table.apply().hit) {
+                l2_broadcast_table.apply();
+            }
         }
         acl.apply();
     }
