@@ -54,11 +54,11 @@ import static org.onosproject.net.PortNumber.FLOOD;
 import static org.onosproject.net.flow.instructions.Instruction.Type.OUTPUT;
 import static org.onosproject.net.flow.instructions.Instructions.OutputInstruction;
 import static org.onosproject.net.pi.model.PiPacketOperationType.PACKET_OUT;
+import static org.p4.p4d2.tutorial.AppConstants.CPU_PORT_ID;
 import static org.p4.p4d2.tutorial.P4InfoConstants.EGRESS_PORT;
 import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_ACL;
 import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_CLONE_TO_CPU;
 import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_DROP;
-import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_PUNT_TO_CPU;
 import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_DST_ADDR;
 import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_ETHER_TYPE;
 import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_SRC_ADDR;
@@ -75,7 +75,6 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         implements PiPipelineInterpreter {
 
     private static final int PORT_BITWIDTH = 9;
-    private static final int CPU_PORT_ID = 255;
 
     private static final ImmutableBiMap<Criterion.Type, PiMatchFieldId> CRITERION_MAP =
             new ImmutableBiMap.Builder<Criterion.Type, PiMatchFieldId>()

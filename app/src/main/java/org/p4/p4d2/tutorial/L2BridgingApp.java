@@ -39,10 +39,16 @@ import org.onosproject.net.host.HostService;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
+import org.onosproject.net.pi.model.PiPipeconf;
 import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
+import org.onosproject.net.pi.runtime.PiCloneSessionEntry;
+import org.onosproject.net.pi.runtime.PiCloneSessionEntryHandle;
+import org.onosproject.net.pi.runtime.PiPreReplica;
 import org.onosproject.net.pi.service.PiPipeconfService;
+import org.onosproject.p4runtime.api.P4RuntimeClient;
+import org.onosproject.p4runtime.api.P4RuntimeController;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -57,7 +63,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.p4.p4d2.tutorial.AppConstants.APP_PREFIX;
+import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
+import static org.p4.p4d2.tutorial.AppConstants.CPU_PORT_ID;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
+import static org.p4.p4d2.tutorial.AppConstants.P4RUNTIME_DEVICE_ID;
 
 @Component(immediate = true)
 public class L2BridgingApp {
@@ -85,6 +94,9 @@ public class L2BridgingApp {
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private GroupService groupService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private P4RuntimeController p4RuntimeController;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private MastershipService mastershipService;
@@ -115,6 +127,10 @@ public class L2BridgingApp {
         log.info("Stopped");
     }
 
+    /**
+     * Sets up bridging on all devices known by ONOS and for which this ONOS
+     * node instance is currently master.
+     */
     private void setUpAllDevices() {
         deviceService.getAvailableDevices().forEach(device -> {
             if (mastershipService.isLocalMaster(device.id())) {
@@ -126,6 +142,10 @@ public class L2BridgingApp {
         });
     }
 
+    /**
+     * Cleans up L2 bridging runtime configuration from all devices known by
+     * ONOS and for which this ONOS node instance is currently master.
+     */
     private void cleanUpAllDevices() {
         deviceService.getDevices().forEach(device -> {
             if (mastershipService.isLocalMaster(device.id())) {
@@ -134,21 +154,50 @@ public class L2BridgingApp {
         });
     }
 
+    /**
+     * Sets up everything necessary to support L2 bridging on the given device.
+     *
+     * @param deviceId the device to set up
+     */
     private void setUpDevice(DeviceId deviceId) {
         log.info("Setting up L2 bridging on {}...", deviceId);
 
-        createOrUpdateBroadcastGroup(deviceId);
-        // create l2_broadcast_rules
+        insertMulticastGroup(deviceId);
+        insertCpuCloneSession(deviceId);
+        insertMulticastFlowRules(deviceId);
+    }
 
+    /**
+     * Cleans up the L2 bridging runtime configuration from the given device.
+     *
+     * @param deviceId the device to clean up
+     */
+    private void cleanUpDevice(DeviceId deviceId) {
+        log.info("Cleaning up L2 bridging on {}...", deviceId);
+        // Remove all runtime entities installed by this app.
+        flowRuleService.removeFlowRulesById(appId);
+        groupService.getGroups(deviceId, appId).forEach(
+                group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
+        deleteCpuCloneSession(deviceId);
+    }
+
+    /**
+     * Insert flow rules to perform packet replication via multicast groups for
+     * all packets matching ethernet destination broadcast/multicast addresses
+     * (e.g. ARP requests, NDP Neighbor Solicitation, etc.)
+     *
+     * @param deviceId device ID where to install the rules
+     */
+    private void insertMulticastFlowRules(DeviceId deviceId) {
         // Action: set multicast group id
-        final PiAction l2MulticastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.l2_multicast_fwd"))
+        final PiAction setMcastGroupAction = PiAction.builder()
+                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("gid"),
                         DEFAULT_BROADCAST_GROUP_ID))
                 .build();
 
-        // Match exactly FF:FF:FF:FF:FF
+        // Arp Request - Match exactly FF:FF:FF:FF:FF
         final PiCriterion macBroadcastCriterion = PiCriterion.builder()
                 .matchTernary(
                         PiMatchFieldId.of("hdr.ethernet.dst_addr"),
@@ -156,7 +205,7 @@ public class L2BridgingApp {
                         MacAddress.valueOf("FF:FF:FF:FF:FF:FF").toBytes())
                 .build();
 
-        // Match ternary 33:33:**:**:**:**
+        // NDP - Match ternary 33:33:**:**:**:**
         final PiCriterion ipv6MulticastCriterion = PiCriterion.builder()
                 .matchTernary(
                         PiMatchFieldId.of("hdr.ethernet.dst_addr"),
@@ -164,18 +213,26 @@ public class L2BridgingApp {
                         MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
                 .build();
 
-        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_broadcast_table");
+        final PiTableId l2TernaryTable = PiTableId.of("FabricIngress.l2_ternary_table");
 
         final FlowRule rule1 = Utils.forgeFlowRule(
-                deviceId, appId, l2BroadcastTable,
-                macBroadcastCriterion, l2MulticastAction);
+                deviceId, appId, l2TernaryTable,
+                macBroadcastCriterion, setMcastGroupAction);
         final FlowRule rule2 = Utils.forgeFlowRule(
-                deviceId, appId, l2BroadcastTable,
-                ipv6MulticastCriterion, l2MulticastAction);
+                deviceId, appId, l2TernaryTable,
+                ipv6MulticastCriterion, setMcastGroupAction);
 
         flowRuleService.applyFlowRules(rule1, rule2);
     }
 
+    /**
+     * Insert flow rules to forward packets to a given host located at the given
+     * device and port.
+     *
+     * @param host     host object
+     * @param deviceId device where the host is located
+     * @param port     port where the host is attached to
+     */
     private void learnHost(Host host, DeviceId deviceId, PortNumber port) {
 
         log.info("Adding L2 bridging rule on {} for host {} (port {})...",
@@ -190,13 +247,13 @@ public class L2BridgingApp {
 
         // Action: L2 unicast (set output port)
         final PiAction l2UnicastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.l2_unicast_fwd"))
+                .withId(PiActionId.of("FabricIngress.set_output_port"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("port_num"),
                         port.toLong()))
                 .build();
 
-        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_table");
+        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_exact_table");
 
         final FlowRule rule = Utils.forgeFlowRule(
                 deviceId, appId, l2BroadcastTable,
@@ -205,14 +262,15 @@ public class L2BridgingApp {
         flowRuleService.applyFlowRules(rule);
     }
 
-    private void forgetHost(Host host, DeviceId deviceId) {
-        log.info("Removing L2 bridging rule for host {} at {}...",
-                 host.id(), deviceId);
-
-        log.warn("forgetHost() not implemented yet");
-    }
-
-    private void createOrUpdateBroadcastGroup(DeviceId deviceId) {
+    /**
+     * Inserts a BROADCAST group in the ONOS core to replicate packets on all
+     * ports known to ONOS for the given device. BROADCAST groups in ONOS are
+     * equivalent to P4Runtime Packet Replication Engine (PRE) Multicast
+     * groups.
+     *
+     * @param deviceId the device where to install the group
+     */
+    private void insertMulticastGroup(DeviceId deviceId) {
         // Create a set with all ports currently known for this device.
         // We want to replicate packets on all these ports.
         Set<PortNumber> ports = deviceService.getPorts(deviceId)
@@ -220,29 +278,71 @@ public class L2BridgingApp {
                 .map(Port::number)
                 .collect(Collectors.toSet());
 
-        // We add the CPU port to support cloning of ARP/NDP packets for host
-        // discovery. This is a workaround to the lack of support in ONOS for
-        // P4Runtime clone sessions, which would be the right way of supporting
-        // packet cloning.
-        ports.add(PortNumber.CONTROLLER);
-
         final GroupDescription multicastGroup = Utils.forgeMulticastGroup(
                 appId, deviceId, DEFAULT_BROADCAST_GROUP_ID, ports);
 
         groupService.addGroup(multicastGroup);
-
-        // FIXME: does the group service support updating an existing group?
     }
 
-    private void cleanUpDevice(DeviceId deviceId) {
-        log.info("Cleaning up L2 bridging on {}...", deviceId);
-
-        // Remove all flows and groups installed by this app.
-        flowRuleService.removeFlowRulesById(appId);
-        groupService.getGroups(deviceId, appId).forEach(
-                group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
+    /**
+     * Inserts a P4Runtime clone sessions to replicate packets to the CPU, i.e.
+     * to generate packet-in to ONOS (controller).
+     * <p>
+     * Since ONOS does not provide yet Suways to abstract clone sessions in its
+     * northbound and core APIs, we use directly the same P4Runtime client
+     * object used by ONOS to communicate with the device.
+     *
+     * @param deviceId device where to install the clone session
+     */
+    private void insertCpuCloneSession(DeviceId deviceId) {
+        final P4RuntimeClient client = p4RuntimeController.get(deviceId);
+        final PiPipeconf pipeconf = pipeconfService.getPipeconf(deviceId).orElse(null);
+        if (pipeconf == null) {
+            log.error("Unable to insert CPU clone session in {}, missing pipeconf", deviceId);
+            return;
+        }
+        final PortNumber cpuPort = PortNumber.portNumber(CPU_PORT_ID);
+        final PiCloneSessionEntry cpuCloneSession = PiCloneSessionEntry.builder()
+                .withSessionId(CPU_CLONE_SESSION_ID)
+                .addReplica(new PiPreReplica(cpuPort, 0))
+                .build();
+        client.write(P4RUNTIME_DEVICE_ID, pipeconf)
+                .insert(cpuCloneSession)
+                .submit()
+                .thenAccept(response -> {
+                    if (!response.isSuccess()) {
+                        log.error("Unable to insert CPU clone session in {}", deviceId);
+                    }
+                });
     }
 
+    /**
+     * Deletes the P4Runtime CPU clone session previously installed.
+     *
+     * @param deviceId device where to delete the clone session
+     */
+    private void deleteCpuCloneSession(DeviceId deviceId) {
+        final P4RuntimeClient client = p4RuntimeController.get(deviceId);
+        final PiPipeconf pipeconf = pipeconfService.getPipeconf(deviceId).orElse(null);
+        if (pipeconf == null) {
+            log.error("Unable to delete CPU clone session from {}, missing pipeconf", deviceId);
+            return;
+        }
+        final PiCloneSessionEntryHandle sessionHandle = PiCloneSessionEntryHandle
+                .of(deviceId, CPU_CLONE_SESSION_ID);
+        client.write(P4RUNTIME_DEVICE_ID, pipeconf)
+                .delete(sessionHandle)
+                .submit()
+                .thenAccept(response -> {
+                    if (!response.isSuccess()) {
+                        log.error("Unable to delete CPU clone session from {}", deviceId);
+                    }
+                });
+    }
+
+    /**
+     * Listener of device events.
+     */
     public class InternalDeviceListener implements DeviceListener {
 
         @Override
@@ -272,6 +372,9 @@ public class L2BridgingApp {
         }
     }
 
+    /**
+     * Listener of host events.
+     */
     public class InternalHostListener implements HostListener {
 
         @Override
@@ -292,12 +395,14 @@ public class L2BridgingApp {
 
             switch (event.type()) {
                 case HOST_ADDED:
-                case HOST_MOVED:
                     //  If host moved we overwrite the previous table entry.
                     learnHost(host, deviceId, port);
                     break;
+                case HOST_MOVED:
                 case HOST_REMOVED:
-                    forgetHost(host, deviceId);
+                    // Food for thoughts:
+                    // how to support host moved and removed events?
+                    log.warn("{} event not supported yet", event.type());
                     break;
                 default:
                     // Ignore other types of events.
