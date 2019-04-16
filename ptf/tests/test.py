@@ -14,15 +14,12 @@
 # limitations under the License.
 #
 
-import struct
-import socket
-
 from p4.v1 import p4runtime_pb2
 from ptf import testutils as testutils
 from ptf.packet import IPv6
 from ptf.testutils import group
-
-from scapy.layers.all import *
+from scapy.layers.inet6 import *
+from scapy.layers.l2 import Ether
 from scapy.pton_ntop import inet_pton, inet_ntop
 from scapy.utils6 import in6_getnsma, in6_getnsmac
 
@@ -39,11 +36,15 @@ SWITCH3_MAC = "00:00:00:00:aa:03"
 HOST1_MAC = "00:00:00:00:00:01"
 HOST2_MAC = "00:00:00:00:00:02"
 
+MAC_FULL_MASK = "FF:FF:FF:FF:FF:FF"
+
 SWITCH1_IPV6 = "2001:0:1::1"
 SWITCH2_IPV6 = "2001:0:2::1"
 SWITCH3_IPV6 = "2001:0:3::1"
 HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
 HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
+
+CPU_CLONE_SESSION_ID = 99
 
 
 def pkt_mac_swap(pkt):
@@ -65,6 +66,24 @@ def pkt_decrement_ttl(pkt):
     elif IPv6 in pkt:
         pkt[IPv6].hlim -= 1
     return pkt
+
+
+def genNdpNsPkt(src_mac, src_ip, target_ip):
+    nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
+    d = inet_ntop(socket.AF_INET6, nsma)
+    dm = in6_getnsmac(nsma)
+    p = Ether(dst=dm) / IPv6(dst=d, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NS(tgt=target_ip)
+    p /= ICMPv6NDOptSrcLLAddr(lladdr=src_mac)
+    return p
+
+
+def genNdpNaPkt(src_mac, dst_mac, src_ip, dst_ip):
+    p = Ether(src=src_mac, dst=dst_mac)
+    p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NA(tgt=src_ip)
+    p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
+    return p
 
 
 class FabricTest(P4RuntimeTest):
@@ -90,29 +109,27 @@ class FabricTest(P4RuntimeTest):
         self.next_grp_id = self.next_grp_id + 1
         return grp_id
 
-    def add_l2_unicast_entry(self, eth_dstAddr, out_port):
+    def add_l2_exact_entry(self, eth_dst, out_port):
         out_port_ = stringify(out_port, 2)
-        self.add_l2_entry(
-            eth_dstAddr,
-            ["FabricIngress.l2_unicast_fwd", [("port_num", out_port_)]])
-
-    def add_l2_multicast_entry(self, eth_dstAddr, out_ports):
-        grp_id = self.get_next_grp_id()
-        grp_id_ = stringify(grp_id, 2)
-        self.add_mcast_group(grp_id, out_ports)
-        self.add_l2_entry(
-            eth_dstAddr,
-            ["FabricIngress.l2_multicast_fwd", [("gid", grp_id_)]])
-
-    def add_l2_entry(self, eth_dstAddr, action):
-        eth_dstAddr_ = mac_to_binary(eth_dstAddr)
-        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dstAddr_)]
+        eth_dst_ = mac_to_binary(eth_dst)
+        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dst_)]
         self.send_request_add_entry_to_action(
-            "FabricIngress.l2_table", mk, *action)
+            "FabricIngress.l2_exact_table", mk,
+            "FabricIngress.set_output_port", [("port_num", out_port_)])
 
-    def add_l2_my_station_entry(self, eth_dstAddr):
-        eth_dstAddr_ = mac_to_binary(eth_dstAddr)
-        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dstAddr_)]
+    def add_l2_ternary_entry(self, eth_dst, eth_dst_mask, mcast_group_id):
+        mc_group_id_ = stringify(mcast_group_id, 2)
+        eth_dst_ = mac_to_binary(eth_dst)
+        eth_dst_mask_ = mac_to_binary(eth_dst_mask)
+        mk = [self.Ternary("hdr.ethernet.dst_addr", eth_dst_, eth_dst_mask_)]
+        self.send_request_add_entry_to_action(
+            "FabricIngress.l2_ternary_table", mk,
+            "FabricIngress.set_multicast_group", [("gid", mc_group_id_)],
+            DEFAULT_PRIORITY)
+
+    def add_l2_my_station_entry(self, eth_dst):
+        eth_dst_ = mac_to_binary(eth_dst)
+        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dst_)]
         self.send_request_add_entry_to_action(
             "FabricIngress.l2_my_station", mk, "NoAction", [])
 
@@ -166,6 +183,22 @@ class FabricTest(P4RuntimeTest):
             replica.instance = 0
         return req, self.write_request(req)
 
+    def add_clone_session(self, session_id, ports, cos=0,
+                          packet_length_bytes=0):
+        req = self.get_new_write_request()
+        update = req.updates.add()
+        update.type = p4runtime_pb2.Update.INSERT
+        pre_entry = update.entity.packet_replication_engine_entry
+        clone_entry = pre_entry.clone_session_entry
+        clone_entry.session_id = session_id
+        clone_entry.class_of_service = cos
+        clone_entry.packet_length_bytes = packet_length_bytes
+        for port in ports:
+            replica = clone_entry.replicas.add()
+            replica.egress_port = port
+            replica.instance = 1
+        return req, self.write_request(req)
+
     def add_ndp_reply_entry(self, target_addr, target_mac):
         target_addr = inet_pton(socket.AF_INET6, target_addr)
         target_mac = mac_to_binary(target_mac)
@@ -175,14 +208,15 @@ class FabricTest(P4RuntimeTest):
             "FabricIngress.ndp_advertisement", [("router_mac", target_mac)])
 
     def add_srv6_transit_2segment_entry(self, dst_ip, prefix_len, s1_ip, s2_ip):
-                self.send_request_add_entry_to_action(
+        self.send_request_add_entry_to_action(
             "FabricIngress.srv6_transit",
             [self.Lpm("hdr.ipv6.dst_addr", ipv6_to_binary(dst_ip), prefix_len)],
             "FabricIngress.srv6_t_insert_2",
             [("s1", ipv6_to_binary(s1_ip)), ("s2", ipv6_to_binary(s2_ip))]
         )
 
-    def add_srv6_transit_3segment_entry(self, dst_ip, prefix_len, s1_ip, s2_ip, s3_ip):
+    def add_srv6_transit_3segment_entry(self, dst_ip, prefix_len, s1_ip, s2_ip,
+                                        s3_ip):
         self.send_request_add_entry_to_action(
             "FabricIngress.srv6_transit",
             [self.Lpm("hdr.ipv6.dst_addr", ipv6_to_binary(dst_ip), prefix_len)],
@@ -203,14 +237,15 @@ class FabricTest(P4RuntimeTest):
 
 
 class FabricBridgingTest(FabricTest):
+    """Tests basic L2 forwarding"""
 
     @autocleanup
     def runBridgingTest(self, pkt):
         mac_src = pkt[Ether].src
         mac_dst = pkt[Ether].dst
         # miss on filtering.fwd_classifier => bridging
-        self.add_l2_unicast_entry(mac_dst, self.port2)
-        self.add_l2_unicast_entry(mac_src, self.port1)
+        self.add_l2_exact_entry(mac_dst, self.port2)
+        self.add_l2_exact_entry(mac_src, self.port1)
         pkt2 = pkt_mac_swap(pkt.copy())
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.send_packet(self, self.port2, str(pkt2))
@@ -225,45 +260,39 @@ class FabricBridgingTest(FabricTest):
                 pktlen=120)
             self.runBridgingTest(pkt)
 
-class FabricNdpReplyTest(FabricTest):
 
-    def GenNdpNsPkt(self, src_mac, src_ip, target_ip):
-        nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
-        d = inet_ntop(socket.AF_INET6, nsma)
-        dm = in6_getnsmac(nsma)
-        p = Ether(dst=dm) / IPv6(dst=d, src=src_ip, hlim=255)
-        p /= ICMPv6ND_NS(tgt=target_ip)
-        p /= ICMPv6NDOptSrcLLAddr(lladdr=src_mac)
-        return p
-
-    def GenNdpNaPkt(self, src_mac, dst_mac, src_ip, dst_ip):
-        p = Ether(src=src_mac, dst=dst_mac)
-        p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
-        p /= ICMPv6ND_NA(tgt=src_ip)
-        p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
-        return p
+class FabricNdpReplyGenTest(FabricTest):
+    """Tests automatic generation of NDP Neighbor Advertisement for IPV6 address
+    associated to the switch interface."""
 
     @autocleanup
     def runTest(self):
-        pkt = self.GenNdpNsPkt(HOST1_MAC, HOST1_IPV6, SWITCH1_IPV6)
-        pkt_expect = self.GenNdpNaPkt(SWITCH1_MAC, IPV6_MCAST_MAC_1, SWITCH1_IPV6, HOST1_IPV6)
+        pkt = genNdpNsPkt(HOST1_MAC, HOST1_IPV6, SWITCH1_IPV6)
+        exp_pkt = genNdpNaPkt(SWITCH1_MAC, IPV6_MCAST_MAC_1,
+                              SWITCH1_IPV6, HOST1_IPV6)
+
         self.add_ndp_reply_entry(SWITCH1_IPV6, SWITCH1_MAC)
+
         testutils.send_packet(self, self.port1, str(pkt))
-        testutils.verify_packet(self, pkt_expect, self.port1)
+        testutils.verify_packet(self, exp_pkt, self.port1)
 
 
-class FabricIPv6UnicastTest(FabricTest):
+class FabricIPv6RoutingTest(FabricTest):
+    """Tests basic IPv6 routing"""
 
     @autocleanup
     def doRunTest(self, pkt, next_hop_mac, prefix_len=128):
         if IPv6 not in pkt or Ether not in pkt:
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
+
         self.add_l2_my_station_entry(pkt[Ether].dst)
         self.add_l3_ecmp_entry(pkt[IPv6].dst, prefix_len, [next_hop_mac])
-        self.add_l2_unicast_entry(next_hop_mac, self.port2)
+        self.add_l2_exact_entry(next_hop_mac, self.port2)
+
         exp_pkt = pkt.copy()
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
+
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, exp_pkt, self.port2)
 
@@ -277,33 +306,37 @@ class FabricIPv6UnicastTest(FabricTest):
             )
             self.doRunTest(pkt, HOST2_MAC)
 
+
 @group("srv6")
 class FabricSrv6InsertTest(FabricTest):
-    '''
-    l2_my_station -> srv6_transit -> l3_table -> l2_table
-    '''
+    """Tests SRv6 insert behavior"""
 
     @autocleanup
     def doRunTest(self, pkt, sid_list):
-        sid_len = len(sid_list)
         if IPv6 not in pkt or Ether not in pkt:
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
+        # l2_my_station -> srv6_transit -> l3_table -> l2_exact_table
         self.add_l2_my_station_entry(SWITCH1_MAC)
-        getattr(self, "add_srv6_transit_%dsegment_entry" % sid_len)(pkt[IPv6].dst, 128, *sid_list)
+        sid_len = len(sid_list)
+        getattr(self, "add_srv6_transit_%dsegment_entry" % sid_len)(
+            pkt[IPv6].dst, 128, *sid_list)
         self.add_l3_ecmp_entry(sid_list[0], 128, [SWITCH2_MAC])
-        self.add_l2_unicast_entry(SWITCH2_MAC, self.port2)
-        testutils.send_packet(self, self.port1, str(pkt))
+        self.add_l2_exact_entry(SWITCH2_MAC, self.port2)
 
         exp_pkt = Ether(src=SWITCH1_MAC, dst=SWITCH2_MAC)
         exp_pkt /= IPv6(dst=sid_list[0], src=pkt[IPv6].src, hlim=63)
         exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6].nh,
                                             addresses=sid_list[::-1],
-                                            len=sid_len * 2, segleft=sid_len - 1, lastentry=sid_len - 1)
+                                            len=sid_len * 2,
+                                            segleft=sid_len - 1,
+                                            lastentry=sid_len - 1)
         exp_pkt /= pkt[IPv6].payload
 
         if ICMPv6EchoRequest in exp_pkt:
             # FIXME: the P4 pipeline should calculate correct ICMPv6 checksum
             exp_pkt[ICMPv6EchoRequest].cksum = pkt[ICMPv6EchoRequest].cksum
+
+        testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, exp_pkt, self.port2)
 
     def runTest(self):
@@ -313,37 +346,39 @@ class FabricSrv6InsertTest(FabricTest):
         )
         for sid_list in sid_lists:
             for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
-                print "Testing %s packet with %d segments ..." % (pkt_type, len(sid_list))
+                print "Testing %s packet with %d segments ..." % (
+                    pkt_type, len(sid_list))
                 pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
                     eth_src=HOST1_MAC, eth_dst=SWITCH1_MAC,
                     ipv6_src=HOST1_IPV6, ipv6_dst=HOST2_IPV6
                 )
                 self.doRunTest(pkt, sid_list)
 
+
 @group("srv6")
 class FabricSrv6TransitTest(FabricTest):
-    '''
-    l2_my_station -> l3_table -> l2_table
-    No changes to SRH header
-    '''
+    """Tests SRv6 transit behavior"""
 
     @autocleanup
     def doRunTest(self, pkt):
         if IPv6 not in pkt or Ether not in pkt:
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
 
+        # l2_my_station -> l3_table -> l2_exact_table
+        # No changes to SRH header
         self.add_l2_my_station_entry(SWITCH2_MAC)
         self.add_srv6_my_sid_entry(SWITCH2_IPV6)
         self.add_l3_ecmp_entry(SWITCH3_IPV6, 128, [SWITCH3_MAC])
-        self.add_l2_unicast_entry(SWITCH3_MAC, self.port2)
+        self.add_l2_exact_entry(SWITCH3_MAC, self.port2)
 
         testutils.send_packet(self, self.port1, str(pkt))
 
         exp_pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
         exp_pkt /= IPv6(dst=SWITCH3_IPV6, src=pkt[IPv6].src, hlim=63)
-        exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6ExtHdrSegmentRouting].nh,
-                                            addresses=[HOST2_IPV6, SWITCH3_IPV6],
-                                            len=2 * 2, segleft=1, lastentry=1)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(
+            nh=pkt[IPv6ExtHdrSegmentRouting].nh,
+            addresses=[HOST2_IPV6, SWITCH3_IPV6],
+            len=2 * 2, segleft=1, lastentry=1)
         exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
 
         testutils.verify_packet(self, exp_pkt, self.port2)
@@ -361,28 +396,28 @@ class FabricSrv6TransitTest(FabricTest):
 
 @group("srv6")
 class FabricSrv6EndTest(FabricTest):
-    '''
-    l2_my_station -> my_sid -> l3_table -> l2_table
-    Decrement SRH SL (after transform SL > 0)
-    '''
+    """Tests SRv6 end behavior"""
 
     @autocleanup
     def doRunTest(self, pkt):
         if IPv6 not in pkt or Ether not in pkt:
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
 
+        # l2_my_station -> my_sid -> l3_table -> l2_exact_table
+        # Decrement SRH SL (after transform SL > 0)
         self.add_l2_my_station_entry(SWITCH2_MAC)
         self.add_srv6_my_sid_entry(SWITCH2_IPV6)
         self.add_l3_ecmp_entry(SWITCH3_IPV6, 128, [SWITCH3_MAC])
-        self.add_l2_unicast_entry(SWITCH3_MAC, self.port2)
+        self.add_l2_exact_entry(SWITCH3_MAC, self.port2)
 
         testutils.send_packet(self, self.port1, str(pkt))
 
         exp_pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
         exp_pkt /= IPv6(dst=SWITCH3_IPV6, src=pkt[IPv6].src, hlim=63)
-        exp_pkt /= IPv6ExtHdrSegmentRouting(nh=pkt[IPv6ExtHdrSegmentRouting].nh,
-                                            addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
-                                            len=3 * 2, segleft=1, lastentry=2)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(
+            nh=pkt[IPv6ExtHdrSegmentRouting].nh,
+            addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+            len=3 * 2, segleft=1, lastentry=2)
         exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
 
         testutils.verify_packet(self, exp_pkt, self.port2)
@@ -390,34 +425,35 @@ class FabricSrv6EndTest(FabricTest):
     def runTest(self):
         pkt = Ether(src=SWITCH1_MAC, dst=SWITCH2_MAC)
         pkt /= IPv6(dst=SWITCH2_IPV6, src=HOST1_IPV6, hlim=64)
-        pkt /= IPv6ExtHdrSegmentRouting(nh=6,
-                                        addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
-                                        len=3 * 2, segleft=2, lastentry=2)
+        pkt /= IPv6ExtHdrSegmentRouting(
+            nh=6, addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+            len=3 * 2, segleft=2, lastentry=2)
         pkt /= TCP()
 
         self.doRunTest(pkt)
 
+
 @group("srv6")
 class FabricSrv6EndPspTest(FabricTest):
-    '''
-    l2_my_station -> my_sid -> l3_table -> l2_table
-    Decrement SRH SL (after transform SL == 0)
-    '''
+    """Tests SRv6 end PSP behavior"""
 
     @autocleanup
     def doRunTest(self, pkt):
         if IPv6 not in pkt or Ether not in pkt:
             self.fail("Cannot do IPv6 test with packet that is not IPv6")
 
+        # l2_my_station -> my_sid -> l3_table -> l2_exact_table
+        # Decrement SRH SL (after transform SL == 0)
         self.add_l2_my_station_entry(SWITCH3_MAC)
         self.add_srv6_my_sid_entry(SWITCH3_IPV6)
         self.add_l3_ecmp_entry(HOST2_IPV6, 128, [HOST2_MAC])
-        self.add_l2_unicast_entry(HOST2_MAC, self.port2)
+        self.add_l2_exact_entry(HOST2_MAC, self.port2)
 
         testutils.send_packet(self, self.port1, str(pkt))
 
         exp_pkt = Ether(src=SWITCH3_MAC, dst=HOST2_MAC)
-        exp_pkt /= IPv6(dst=HOST2_IPV6, src=pkt[IPv6].src, hlim=63, nh=pkt[IPv6ExtHdrSegmentRouting].nh)
+        exp_pkt /= IPv6(dst=HOST2_IPV6, src=pkt[IPv6].src, hlim=63,
+                        nh=pkt[IPv6ExtHdrSegmentRouting].nh)
         exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
 
         testutils.verify_packet(self, exp_pkt, self.port2)
@@ -425,9 +461,9 @@ class FabricSrv6EndPspTest(FabricTest):
     def runTest(self):
         pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
         pkt /= IPv6(dst=SWITCH3_IPV6, src=HOST1_IPV6, hlim=64)
-        pkt /= IPv6ExtHdrSegmentRouting(nh=6,
-                                        addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
-                                        len=3 * 2, segleft=1, lastentry=2)
+        pkt /= IPv6ExtHdrSegmentRouting(
+            nh=6, addresses=[HOST2_IPV6, SWITCH3_IPV6, SWITCH2_IPV6],
+            len=3 * 2, segleft=1, lastentry=2)
         pkt /= TCP()
 
         self.doRunTest(pkt)
@@ -482,23 +518,60 @@ class FabricPacketInTest(FabricTest):
 
 
 class FabricArpBroadcastWithCloneTest(FabricTest):
+    """Tests ability to broadcast ARP requests as well as cloning to CPU
+    (controller) for host discovery
+    """
 
     @autocleanup
     def runTest(self):
-        ports = [self.port1, self.port2, self.port3]
         pkt = testutils.simple_arp_packet()
-        # FIXME: use clone session APIs when supported on PI
-        # For now we add the CPU port to the mc group.
-        self.add_l2_multicast_entry(pkt[Ether].dst, ports + [self.cpu_port])
-        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+        mcast_group_id = 10
+        mcast_ports = [self.port1, self.port2, self.port3]
 
-        for inport in ports:
+        self.add_mcast_group(group_id=mcast_group_id, ports=mcast_ports)
+        self.add_l2_ternary_entry(
+            eth_dst=pkt[Ether].dst, eth_dst_mask=MAC_FULL_MASK,
+            mcast_group_id=mcast_group_id)
+        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
+
+        for inport in mcast_ports:
             testutils.send_packet(self, inport, str(pkt))
             # Pkt should be received on CPU and on all ports
             # except the ingress one.
             self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
-            verify_ports = set(ports)
+            verify_ports = set(mcast_ports)
             verify_ports.discard(inport)
             for port in verify_ports:
                 testutils.verify_packet(self, pkt, port)
         testutils.verify_no_other_packets(self)
+
+
+class FabricArpNdpReplyWithCloneTest(FabricTest):
+    """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
+    requesting host.
+    """
+
+    @autocleanup
+    def test(self, pkt):
+        self.add_l2_exact_entry(pkt[Ether].dst, self.port1)
+        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
+
+        testutils.send_packet(self, self.port2, str(pkt))
+
+        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port2)
+        testutils.verify_packet(self, pkt, self.port1)
+
+    def runTest(self):
+        print ""
+        print "Testing ARP reply packet..."
+        # op=1 request, op=2 relpy
+        arp_pkt = testutils.simple_arp_packet(
+            eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
+        self.test(arp_pkt)
+
+        print "Testing NDP NA packet..."
+        ndp_pkt = genNdpNaPkt(src_mac=HOST1_MAC, dst_mac=HOST2_MAC,
+                              src_ip=HOST1_IPV6, dst_ip=HOST2_IPV6)
+        self.test(ndp_pkt)

@@ -26,7 +26,7 @@ BMV2_TARGET_EXE = 'simple_switch_grpc'
 BMV2_RUNTIME_FILE_PATH_PREFIX = '/tmp/bmv2-ptf'
 SWITCH_START_TIMEOUT = 5
 
-logger = logging.getLogger("BMv2 switch")
+logger = logging.getLogger("BMv2")
 
 
 def get_stratum_root():
@@ -145,7 +145,7 @@ class Bmv2Switch:
             cmdString = self.get_cmd(port_map)
             ld_path = ""
 
-        logger.info("\nStarting BMv2... %s\n" % cmdString)
+        logger.info("Starting... %s" % cmdString)
 
         # Start the switch
         try:

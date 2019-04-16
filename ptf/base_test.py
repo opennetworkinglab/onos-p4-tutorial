@@ -20,6 +20,7 @@
 #
 
 import Queue
+import struct
 import sys
 import threading
 import time

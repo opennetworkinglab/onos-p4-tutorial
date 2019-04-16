@@ -142,7 +142,7 @@ public class L2BridgingApp {
 
         // Action: set multicast group id
         final PiAction l2MulticastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.l2_multicast_fwd"))
+                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("gid"),
                         DEFAULT_BROADCAST_GROUP_ID))
@@ -164,7 +164,7 @@ public class L2BridgingApp {
                         MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
                 .build();
 
-        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_broadcast_table");
+        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_ternary_table");
 
         final FlowRule rule1 = Utils.forgeFlowRule(
                 deviceId, appId, l2BroadcastTable,
@@ -190,13 +190,13 @@ public class L2BridgingApp {
 
         // Action: L2 unicast (set output port)
         final PiAction l2UnicastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.l2_unicast_fwd"))
+                .withId(PiActionId.of("FabricIngress.set_output_port"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("port_num"),
                         port.toLong()))
                 .build();
 
-        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_table");
+        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_exact_table");
 
         final FlowRule rule = Utils.forgeFlowRule(
                 deviceId, appId, l2BroadcastTable,
