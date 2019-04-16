@@ -21,6 +21,8 @@
 #include "include/parser.p4"
 #include "include/checksum.p4"
 
+#define CPU_CLONE_SESSION_ID 99
+
 
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
@@ -59,41 +61,41 @@ control FabricIngress (inout parsed_headers_t hdr,
         }
     }
 
-    action l2_unicast_fwd(port_num_t port_num) {
+    action set_output_port(port_num_t port_num) {
         standard_metadata.egress_spec = port_num;
     }
 
-    action l2_multicast_fwd(group_id_t gid) {
+    action set_multicast_group(group_id_t gid) {
         standard_metadata.mcast_grp = gid;
         fabric_metadata.is_multicast = _TRUE;
     }
 
-    direct_counter(CounterType.packets_and_bytes) l2_table_counter;
+    direct_counter(CounterType.packets_and_bytes) l2_exact_table_counter;
 
-    table l2_table {
+    table l2_exact_table {
         key = {
             hdr.ethernet.dst_addr: exact;
         }
         actions = {
-            l2_unicast_fwd;
+            set_output_port;
             @defaultonly NoAction;
         }
         const default_action = NoAction;
-        counters = l2_table_counter;
+        counters = l2_exact_table_counter;
     }
 
-    direct_counter(CounterType.packets_and_bytes) l2_broadcast_table_counter;
+    direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
 
-    table l2_broadcast_table {
+    table l2_ternary_table {
         key = {
             hdr.ethernet.dst_addr: ternary;
         }
         actions = {
-            l2_multicast_fwd;
+            set_multicast_group;
             drop;
         }
         const default_action = drop;
-        counters = l2_broadcast_table_counter;
+        counters = l2_ternary_table_counter;
     }
 
     table l2_my_station {
@@ -203,8 +205,7 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     action clone_to_cpu() {
-        // FIXME: works only if pkt will be replicated via PRE multicast group.
-        fabric_metadata.clone_to_cpu = _TRUE;
+        clone3(CloneType.I2E, CPU_CLONE_SESSION_ID, standard_metadata);
     }
 
     table acl {
@@ -270,8 +271,8 @@ control FabricIngress (inout parsed_headers_t hdr,
            //}
         }
         if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) { // FIXME packet not marked drop
-            if (!l2_table.apply().hit) {
-                l2_broadcast_table.apply();
+            if (!l2_exact_table.apply().hit) {
+                l2_ternary_table.apply();
             }
         }
         acl.apply();
@@ -283,12 +284,6 @@ control FabricEgress (inout parsed_headers_t hdr,
                       inout standard_metadata_t standard_metadata) {
     apply {
         if (standard_metadata.egress_port == CPU_PORT) {
-            if (fabric_metadata.is_multicast == _TRUE &&
-                fabric_metadata.clone_to_cpu == _FALSE) {
-                // Is multicast but clone was not requested.
-                mark_to_drop();
-            }
-
             hdr.packet_in.setValid();
             hdr.packet_in.ingress_port = standard_metadata.ingress_port;
         }

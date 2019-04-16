@@ -139,7 +139,6 @@ header ndp_option_t {
 //Custom metadata definition
 struct fabric_metadata_t {
     _BOOL is_multicast;
-    _BOOL clone_to_cpu;
     _BOOL is_l3_fwd;
     _BOOL skip_l2;
     ipv6_addr_t next_srv6_sid;
