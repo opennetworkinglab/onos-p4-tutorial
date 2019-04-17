@@ -353,13 +353,14 @@ nodes {{
             stratumRoot + STRATUM_BINARY,
             '-device_id=%d' % self.p4DeviceId,
             '-chassis_config_file=%s' % self.chassisConfigFile,
-            '-forwarding_pipeline_configs_file=%s/pipeline_config.txt' % config_dir,
+            '-forwarding_pipeline_configs_file=/dev/null',
             '-persistent_config_dir=' + config_dir,
             '-initial_pipeline=' + stratumRoot + STRATUM_INIT_PIPELINE,
             '-cpu_port=%s' % self.cpuPort,
             '-external_hercules_urls=0.0.0.0:%d' % self.grpcPort,
             '-local_hercules_url=localhost:%d' % self.grpcPortInternal,
-            '-max_num_controllers_per_node=10'
+            '-max_num_controllers_per_node=10',
+            '-write_req_log_file=/dev/null'
         ]
         return " ".join(args)
 
