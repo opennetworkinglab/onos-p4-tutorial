@@ -42,7 +42,6 @@ import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
-import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
 import org.osgi.service.component.annotations.Activate;
@@ -215,13 +214,13 @@ public class L2BridgingApp {
                         MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
                 .build();
 
-        final PiTableId l2TernaryTable = PiTableId.of("FabricIngress.l2_ternary_table");
+        final String tableId = "FabricIngress.l2_ternary_table";
 
         final FlowRule rule1 = Utils.forgeFlowRule(
-                deviceId, appId, l2TernaryTable,
+                deviceId, appId, tableId,
                 macBroadcastCriterion, setMcastGroupAction);
         final FlowRule rule2 = Utils.forgeFlowRule(
-                deviceId, appId, l2TernaryTable,
+                deviceId, appId, tableId,
                 ipv6MulticastCriterion, setMcastGroupAction);
 
         flowRuleService.applyFlowRules(rule1, rule2);
@@ -255,10 +254,8 @@ public class L2BridgingApp {
                         port.toLong()))
                 .build();
 
-        final PiTableId l2BroadcastTable = PiTableId.of("FabricIngress.l2_exact_table");
-
         final FlowRule rule = Utils.forgeFlowRule(
-                deviceId, appId, l2BroadcastTable,
+                deviceId, appId, "FabricIngress.l2_exact_table",
                 hostMacCriterion, l2UnicastAction);
 
         flowRuleService.applyFlowRules(rule);

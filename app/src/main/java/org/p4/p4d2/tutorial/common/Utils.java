@@ -91,10 +91,10 @@ public final class Utils {
     }
 
     public static FlowRule forgeFlowRule(DeviceId switchId, ApplicationId appId,
-                                         PiTableId tableId, PiCriterion piCriterion, PiAction piAction) {
+                                         String tableId, PiCriterion piCriterion, PiAction piAction) {
         return DefaultFlowRule.builder()
                 .forDevice(switchId)
-                .forTable(tableId)
+                .forTable(PiTableId.of(tableId))
                 .fromApp(appId)
                 .withPriority(DEFAULT_FLOW_RULE_PRIORITY)
                 .makePermanent()
