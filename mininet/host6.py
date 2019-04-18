@@ -24,6 +24,10 @@ class IPv6Host(Host):
         if ipv6_gw:
             self.cmd('ip -6 route add default via %s' % ipv6_gw)
 
+        def updateIP():
+            return ipv6.split('/')[0]
+        self.defaultIntf().updateIP = updateIP
+
     def terminate(self):
         # self.cmd( 'sysctl -w net.ipv6.conf.all.forwarding=0' )
         super(IPv6Host, self).terminate()
