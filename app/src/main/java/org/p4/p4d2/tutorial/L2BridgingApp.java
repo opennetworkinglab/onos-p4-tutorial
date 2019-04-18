@@ -104,6 +104,11 @@ public class L2BridgingApp {
     @Activate
     protected void activate() {
         appId = coreService.registerApplication(APP_NAME);
+        try {
+            Utils.waitUntilPreviousCleanupFinished(appId, deviceService, flowRuleService, groupService);
+        } catch (InterruptedException e) {
+            log.warn("Get exception when clean up the app {}: {}", appId, e.getMessage());
+        }
         // Register listeners to be informed about device and host events.
         deviceService.addListener(deviceListener);
         hostService.addListener(hostListener);

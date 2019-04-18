@@ -56,6 +56,7 @@ import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
+import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,6 +101,11 @@ public class NdpReplyComponent {
     @Activate
     public void activate() {
         appId = coreService.registerApplication(APP_NAME);
+        try {
+            Utils.waitUntilPreviousCleanupFinished(appId, deviceService, flowRuleService, null);
+        } catch (InterruptedException e) {
+            log.warn("Get exception when clean up the app {}: {}", appId, e.getMessage());
+        }
         deviceService.addListener(deviceListener);
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);

@@ -33,8 +33,6 @@ import org.onosproject.net.Host;
 import org.onosproject.net.Link;
 import org.onosproject.net.PortNumber;
 import org.onosproject.net.config.NetworkConfigService;
-import org.onosproject.net.device.DeviceEvent;
-import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
@@ -83,8 +81,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.p4.p4d2.tutorial.AppConstants.CLEAN_UP_DELAY;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 /**
@@ -129,14 +129,17 @@ public class Ipv6Routing {
 
     private ApplicationId appId;
     private HostListener hostListener = new InternalHostListener();
-    private DeviceListener deviceListener = new InternalDeviceListener();
     private LinkListener linkListener = new InternalLinkListener();
 
     @Activate
     protected void activate() {
         appId = coreService.registerApplication(APP_NAME);
+        try {
+            Utils.waitUntilPreviousCleanupFinished(appId, deviceService, flowRuleService, groupService);
+        } catch (InterruptedException e) {
+            log.warn("Get exception when clean up the app {}: {}", appId, e.getMessage());
+        }
         hostService.addListener(hostListener);
-        deviceService.addListener(deviceListener);
         linkService.addListener(linkListener);
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
@@ -146,7 +149,6 @@ public class Ipv6Routing {
     @Deactivate
     protected void deactivate() {
         hostService.removeListener(hostListener);
-        deviceService.removeListener(deviceListener);
         linkService.removeListener(linkListener);
         clearAllDevices();
         log.info("Stopped");
@@ -294,7 +296,7 @@ public class Ipv6Routing {
     private void setUpHostRules(Host host) {
         MacAddress hostMac = host.mac();
         DeviceId hostDevice = host.location().deviceId();
-        log.info("Setting up host route: {}", hostMac);
+
 
         // Get all IPv6 address from the host
         Collection<Ip6Address> hostIpv6s = host.ipAddresses()
@@ -302,6 +304,13 @@ public class Ipv6Routing {
                 .filter(IpAddress::isIp6)
                 .map(IpAddress::getIp6Address)
                 .collect(Collectors.toSet());
+
+        if (hostIpv6s.isEmpty()) {
+            log.info("No IPV6 addresses for the host {}, skip", hostMac);
+            return;
+        } else {
+            log.info("Setting up host route: {} with IPv6: {}", hostMac, hostIpv6s);
+        }
 
         int groupId = createGroupIdFromNextHopMac(hostMac);
         GroupDescription group = createNextHopGroups(groupId, hostMac, hostDevice);
@@ -344,7 +353,7 @@ public class Ipv6Routing {
     private void setUpSpineRoutes(DeviceId spineDeviceId) {
         log.info("Setting up spine routes: {}", spineDeviceId);
 
-        deviceService.getAvailableDevices().forEach(device -> {
+        deviceService.getDevices().forEach(device -> {
             if (isSpine(device.id()).orElse(true)) {
                 // skip if it is a spine or unknown
                 return;
@@ -355,6 +364,11 @@ public class Ipv6Routing {
 
             if (leafMac == null) {
                 log.debug("Cannot fine mac address for leaf {}, skip", leafDeviceId);
+                return;
+            }
+
+            if (subnetSet.isEmpty()) {
+                log.debug("No subnet found on leaf {}, skip", leafDeviceId);
                 return;
             }
 
@@ -379,7 +393,7 @@ public class Ipv6Routing {
         log.info("Setting up leaf routes: {}", leafDeviceId);
         // Collect mac address from spines
         Set<MacAddress> spineMacs =
-                Streams.stream(deviceService.getAvailableDevices())
+                Streams.stream(deviceService.getDevices())
                         .map(Device::id)
                         .filter(deviceId -> isSpine(deviceId).orElse(false))
                         .map(deviceId -> getDeviceMac(deviceId).orElse(null))
@@ -575,31 +589,6 @@ public class Ipv6Routing {
     }
 
     /**
-     * Device listener which listens DEVICE_ADDED and DEVICE_AVAILABILITY_CHANGED
-     * event.
-     */
-    class InternalDeviceListener implements DeviceListener {
-
-        @Override
-        public void event(DeviceEvent event) {
-            switch (event.type()) {
-                case DEVICE_ADDED:
-                case DEVICE_AVAILABILITY_CHANGED:
-                    setUpAllDevices();
-                    break;
-                default:
-                    log.debug("Unsupported event type {}", event.type());
-                    break;
-            }
-        }
-
-        @Override
-        public boolean isRelevant(DeviceEvent event) {
-            return mastershipService.isLocalMaster(event.subject().id());
-        }
-    }
-
-    /**
      * Link listener which listens LINK_ADDED event.
      */
     class InternalLinkListener implements LinkListener {
@@ -608,7 +597,18 @@ public class Ipv6Routing {
         public void event(LinkEvent event) {
             switch (event.type()) {
                 case LINK_ADDED:
-                    setUpAllDevices();
+                    DeviceId srcDev = event.subject().src().deviceId();
+                    DeviceId dstDev = event.subject().dst().deviceId();
+                    if (mastershipService.isLocalMaster(srcDev)) {
+                        setUpMyStationTable(srcDev);
+                        setUpRoute(srcDev);
+                        setUpNextHopRules(srcDev);
+                    }
+                    if (mastershipService.isLocalMaster(dstDev)) {
+                        setUpMyStationTable(dstDev);
+                        setUpRoute(dstDev);
+                        setUpNextHopRules(dstDev);
+                    }
                     break;
                 default:
                     log.debug("Unsupported event type {}", event.type());

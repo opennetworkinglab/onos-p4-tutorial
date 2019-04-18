@@ -20,6 +20,7 @@ class IPv6Host(Host):
     def config(self, ipv6, ipv6_gw=None, **params):
         super(IPv6Host, self).config(**params)
         self.cmd('ip -4 addr flush dev %s' % self.defaultIntf())
+        self.cmd('ip -6 addr flush dev %s' % self.defaultIntf())
         self.cmd('ip -6 addr add %s dev %s' % (ipv6, self.defaultIntf()))
         if ipv6_gw:
             self.cmd('ip -6 route add default via %s' % ipv6_gw)
