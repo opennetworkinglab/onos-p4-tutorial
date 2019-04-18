@@ -208,23 +208,25 @@ control FabricIngress (inout parsed_headers_t hdr,
         clone3(CloneType.I2E, CPU_CLONE_SESSION_ID, standard_metadata);
     }
 
+    direct_counter(CounterType.packets_and_bytes) acl_counter;
+
     table acl {
         key = {
-            standard_metadata.ingress_port: ternary; // 9
-            hdr.ethernet.dst_addr: ternary; // 48
-            hdr.ethernet.src_addr: ternary; // 48
-            hdr.ethernet.ether_type: ternary; // 16
-            hdr.icmp.icmp_type: ternary; // 8
-            hdr.icmp.icmp_code: ternary; // 8
-            fabric_metadata.ip_proto: ternary; // 8
-            fabric_metadata.l4_src_port: ternary; // 16
-            fabric_metadata.l4_dst_port: ternary; // 16
+            standard_metadata.ingress_port: ternary;
+            hdr.ethernet.dst_addr: ternary;
+            hdr.ethernet.src_addr: ternary;
+            hdr.ethernet.ether_type: ternary;
+            fabric_metadata.ip_proto: ternary;
+            fabric_metadata.icmp_type: ternary;
+            fabric_metadata.l4_src_port: ternary;
+            fabric_metadata.l4_dst_port: ternary;
         }
         actions = {
             punt_to_cpu;
             clone_to_cpu;
             drop;
         }
+        counters = acl_counter;
     }
 
     action srv6_pop() {

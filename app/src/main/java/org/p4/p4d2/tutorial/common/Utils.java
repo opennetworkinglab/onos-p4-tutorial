@@ -24,7 +24,6 @@ import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.criteria.PiCriterion;
-import org.onosproject.net.group.DefaultGroupBucket;
 import org.onosproject.net.group.DefaultGroupDescription;
 import org.onosproject.net.group.DefaultGroupKey;
 import org.onosproject.net.group.GroupBucket;
@@ -35,12 +34,14 @@ import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.group.DefaultGroupBucket.createAllGroupBucket;
+import static org.onosproject.net.group.DefaultGroupBucket.createCloneGroupBucket;
 import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_FLOW_RULE_PRIORITY;
 
 public final class Utils {
@@ -49,7 +50,24 @@ public final class Utils {
             ApplicationId appId,
             DeviceId deviceId,
             int groupId,
-            Set<PortNumber> ports) {
+            Collection<PortNumber> ports) {
+        return forgeReplicationGroup(appId, deviceId, groupId, ports, false);
+    }
+
+    public static GroupDescription forgeCloneGroup(
+            ApplicationId appId,
+            DeviceId deviceId,
+            int groupId,
+            Collection<PortNumber> ports) {
+        return forgeReplicationGroup(appId, deviceId, groupId, ports, true);
+    }
+
+    private static GroupDescription forgeReplicationGroup(
+            ApplicationId appId,
+            DeviceId deviceId,
+            int groupId,
+            Collection<PortNumber> ports,
+            boolean isClone) {
 
         checkNotNull(deviceId);
         checkNotNull(appId);
@@ -61,18 +79,19 @@ public final class Utils {
         final List<GroupBucket> bucketList = ports.stream()
                 .map(p -> DefaultTrafficTreatment.builder()
                         .setOutput(p).build())
-                .map(DefaultGroupBucket::createAllGroupBucket)
+                .map(t -> isClone ? createCloneGroupBucket(t)
+                        : createAllGroupBucket(t))
                 .collect(Collectors.toList());
 
         return new DefaultGroupDescription(
                 deviceId,
-                GroupDescription.Type.ALL,
+                isClone ? GroupDescription.Type.CLONE : GroupDescription.Type.ALL,
                 new GroupBuckets(bucketList),
                 groupKey, groupId, appId);
     }
 
     public static FlowRule forgeFlowRule(DeviceId switchId, ApplicationId appId,
-                                   PiTableId tableId, PiCriterion piCriterion, PiAction piAction) {
+                                         PiTableId tableId, PiCriterion piCriterion, PiAction piAction) {
         return DefaultFlowRule.builder()
                 .forDevice(switchId)
                 .forTable(tableId)

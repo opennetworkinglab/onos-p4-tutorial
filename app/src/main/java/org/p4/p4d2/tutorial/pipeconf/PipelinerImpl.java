@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.List;
 
-import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_ACL;
+import static org.p4.p4d2.tutorial.AppConstants.ACL_TABLE;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -69,7 +69,7 @@ public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner
 
         // Simply create an equivalent FlowRule for table 0.
         final FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()
-                .forTable(FABRIC_INGRESS_ACL)
+                .forTable(PiTableId.of(ACL_TABLE))
                 .forDevice(deviceId)
                 .withSelector(obj.selector())
                 .fromApp(obj.appId())

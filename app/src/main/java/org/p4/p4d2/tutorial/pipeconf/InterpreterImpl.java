@@ -16,7 +16,6 @@
 
 package org.p4.p4d2.tutorial.pipeconf;
 
-import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import org.onlab.packet.DeserializationException;
 import org.onlab.packet.Ethernet;
@@ -35,6 +34,7 @@ import org.onosproject.net.packet.InboundPacket;
 import org.onosproject.net.packet.OutboundPacket;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
+import org.onosproject.net.pi.model.PiPacketMetadataId;
 import org.onosproject.net.pi.model.PiPipelineInterpreter;
 import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
@@ -54,18 +54,14 @@ import static org.onosproject.net.PortNumber.FLOOD;
 import static org.onosproject.net.flow.instructions.Instruction.Type.OUTPUT;
 import static org.onosproject.net.flow.instructions.Instructions.OutputInstruction;
 import static org.onosproject.net.pi.model.PiPacketOperationType.PACKET_OUT;
+import static org.p4.p4d2.tutorial.AppConstants.ACL_TABLE;
+import static org.p4.p4d2.tutorial.AppConstants.CLONE_TO_CPU;
 import static org.p4.p4d2.tutorial.AppConstants.CPU_PORT_ID;
-import static org.p4.p4d2.tutorial.P4InfoConstants.EGRESS_PORT;
-import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_ACL;
-import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_CLONE_TO_CPU;
-import static org.p4.p4d2.tutorial.P4InfoConstants.FABRIC_INGRESS_DROP;
-import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_DST_ADDR;
-import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_ETHER_TYPE;
-import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_ETHERNET_SRC_ADDR;
-import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_IPV6_DST_ADDR;
-import static org.p4.p4d2.tutorial.P4InfoConstants.HDR_STANDARD_METADATA_INGRESS_PORT;
-import static org.p4.p4d2.tutorial.P4InfoConstants.INGRESS_PORT;
-import static org.p4.p4d2.tutorial.P4InfoConstants.NO_ACTION;
+import static org.p4.p4d2.tutorial.AppConstants.CRITERION_MAP;
+import static org.p4.p4d2.tutorial.AppConstants.DROP_ACTION;
+import static org.p4.p4d2.tutorial.AppConstants.EGRESS_PORT_CTRL_METADATA;
+import static org.p4.p4d2.tutorial.AppConstants.INGRESS_PORT_CTRL_METADATA;
+import static org.p4.p4d2.tutorial.AppConstants.NO_ACTION;
 
 
 /**
@@ -76,26 +72,17 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
 
     private static final int PORT_BITWIDTH = 9;
 
-    private static final ImmutableBiMap<Criterion.Type, PiMatchFieldId> CRITERION_MAP =
-            new ImmutableBiMap.Builder<Criterion.Type, PiMatchFieldId>()
-                    .put(Criterion.Type.IN_PORT, HDR_STANDARD_METADATA_INGRESS_PORT)
-                    .put(Criterion.Type.ETH_DST, HDR_ETHERNET_DST_ADDR)
-                    .put(Criterion.Type.ETH_SRC, HDR_ETHERNET_SRC_ADDR)
-                    .put(Criterion.Type.ETH_TYPE, HDR_ETHERNET_ETHER_TYPE)
-                    .put(Criterion.Type.IPV6_DST, HDR_IPV6_DST_ADDR)
-                    .build();
-
     @Override
     public PiAction mapTreatment(TrafficTreatment treatment, PiTableId piTableId)
             throws PiInterpreterException {
-        if (!piTableId.equals(FABRIC_INGRESS_ACL)) {
+        if (!piTableId.id().equals(ACL_TABLE)) {
             throw new PiInterpreterException(
                     "Treatment mapping not supported for table " + piTableId);
         }
 
         if (treatment.allInstructions().isEmpty()) {
             // Zero instructions means drop.
-            return PiAction.builder().withId(FABRIC_INGRESS_DROP).build();
+            return PiAction.builder().withId(PiActionId.of(DROP_ACTION)).build();
         } else if (treatment.allInstructions().size() > 1) {
             // We understand treatments with only 1 instruction.
             throw new PiInterpreterException("Treatment has too many instructions");
@@ -108,7 +95,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
                 if (port.equals(CONTROLLER)) {
                     // FIXME: modify hostprovider and packet requests to install
                     //  clone to CPU rules.
-                    final PiActionId actionId = FABRIC_INGRESS_CLONE_TO_CPU;
+                    final PiActionId actionId = PiActionId.of(CLONE_TO_CPU);
                     // final PiActionId actionId = treatment.clearedDeferred()
                     //         ? FABRIC_INGRESS_PUNT_TO_CPU
                     //         : FABRIC_INGRESS_CLONE_TO_CPU;
@@ -116,7 +103,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
                 }
                 break;
             case NOACTION:
-                return PiAction.builder().withId(NO_ACTION).build();
+                return PiAction.builder().withId(PiActionId.of(NO_ACTION)).build();
             default:
                 break;
         }
@@ -177,7 +164,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
 
         // Returns the ingress port packet metadata.
         Optional<PiPacketMetadata> packetMetadata = packetIn.metadatas()
-                .stream().filter(m -> m.id().equals(INGRESS_PORT))
+                .stream().filter(m -> m.id().id().equals(INGRESS_PORT_CTRL_METADATA))
                 .findFirst();
 
         if (packetMetadata.isPresent()) {
@@ -189,7 +176,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         } else {
             throw new PiInterpreterException(format(
                     "Missing metadata '%s' in packet-in received from '%s': %s",
-                    INGRESS_PORT, deviceId, packetIn));
+                    INGRESS_PORT_CTRL_METADATA, deviceId, packetIn));
         }
     }
 
@@ -206,7 +193,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
     private PiPacketMetadata createPacketMetadata(long portNumber) throws PiInterpreterException {
         try {
             return PiPacketMetadata.builder()
-                    .withId(EGRESS_PORT)
+                    .withId(PiPacketMetadataId.of(EGRESS_PORT_CTRL_METADATA))
                     .withValue(copyFrom(portNumber).fit(PORT_BITWIDTH))
                     .build();
         } catch (ImmutableByteSequence.ByteSequenceTrimException e) {
@@ -226,21 +213,15 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
 
     @Override
     public Optional<PiMatchFieldId> mapCriterionType(Criterion.Type type) {
-        return Optional.ofNullable(CRITERION_MAP.get(type));
-    }
-
-    @Override
-    public Optional<Criterion.Type> mapPiMatchFieldId(PiMatchFieldId headerFieldId) {
-        return Optional.ofNullable(CRITERION_MAP.inverse().get(headerFieldId));
+        if (CRITERION_MAP.containsKey(type)) {
+            return Optional.of(PiMatchFieldId.of(CRITERION_MAP.get(type)));
+        } else {
+            return Optional.empty();
+        }
     }
 
     @Override
     public Optional<PiTableId> mapFlowRuleTableId(int flowRuleTableId) {
-        return Optional.empty();
-    }
-
-    @Override
-    public Optional<Integer> mapPiTableId(PiTableId piTableId) {
         return Optional.empty();
     }
 }

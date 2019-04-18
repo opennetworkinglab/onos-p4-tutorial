@@ -111,7 +111,7 @@ header udp_t {
 }
 
 header icmp_t {
-    bit<8> icmp_type;
+    bit<8> type;
     bit<8> icmp_code;
     bit<16> checksum;
     bit<16> identifier;
@@ -143,6 +143,7 @@ struct fabric_metadata_t {
     _BOOL skip_l2;
     ipv6_addr_t next_srv6_sid;
     bit<8> ip_proto;
+    bit<8> icmp_type;
     l4_port_t l4_src_port;
     l4_port_t l4_dst_port;
 }

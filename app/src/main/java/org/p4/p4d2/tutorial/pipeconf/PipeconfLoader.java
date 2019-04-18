@@ -19,7 +19,6 @@ package org.p4.p4d2.tutorial.pipeconf;
 import org.onosproject.net.behaviour.Pipeliner;
 import org.onosproject.net.pi.model.DefaultPiPipeconf;
 import org.onosproject.net.pi.model.PiPipeconf;
-import org.onosproject.net.pi.model.PiPipeconfId;
 import org.onosproject.net.pi.model.PiPipelineInterpreter;
 import org.onosproject.net.pi.model.PiPipelineModel;
 import org.onosproject.net.pi.service.PiPipeconfService;
@@ -37,7 +36,7 @@ import java.net.URL;
 
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.BMV2_JSON;
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.P4_INFO_TEXT;
-import static org.p4.p4d2.tutorial.AppConstants.SRV6_PIPECONF_ID;
+import static org.p4.p4d2.tutorial.AppConstants.PIPECONF_ID;
 
 /**
  * Component that builds and register the pipeconf at app activation.
@@ -57,15 +56,15 @@ public final class PipeconfLoader {
     @Activate
     public void activate() {
         // Registers the pipeconf at component activation.
-        if (pipeconfService.getPipeconf(SRV6_PIPECONF_ID).isPresent()) {
+        if (pipeconfService.getPipeconf(PIPECONF_ID).isPresent()) {
             // Remove first if already registered, to support reloading of the
             // pipeconf during the tutorial.
-            pipeconfService.remove(SRV6_PIPECONF_ID);
+            pipeconfService.remove(PIPECONF_ID);
         }
         try {
             pipeconfService.register(buildPipeconf());
         } catch (P4InfoParserException e) {
-            log.error("Unable to register " + SRV6_PIPECONF_ID, e);
+            log.error("Unable to register " + PIPECONF_ID, e);
         }
     }
 
@@ -81,7 +80,7 @@ public final class PipeconfLoader {
         final PiPipelineModel pipelineModel = P4InfoParser.parse(p4InfoUrl);
 
         return DefaultPiPipeconf.builder()
-                .withId(SRV6_PIPECONF_ID)
+                .withId(PIPECONF_ID)
                 .withPipelineModel(pipelineModel)
                 .addBehaviour(PiPipelineInterpreter.class, InterpreterImpl.class)
                 .addBehaviour(Pipeliner.class, PipelinerImpl.class)

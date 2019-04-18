@@ -42,10 +42,14 @@ import org.onosproject.net.intf.Interface;
 import org.onosproject.net.intf.InterfaceEvent;
 import org.onosproject.net.intf.InterfaceListener;
 import org.onosproject.net.intf.InterfaceService;
+import org.onosproject.net.pi.model.PiActionId;
+import org.onosproject.net.pi.model.PiActionParamId;
+import org.onosproject.net.pi.model.PiMatchFieldId;
+import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
-import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
@@ -194,12 +198,13 @@ public class NdpReplyComponent {
                                       MacAddress deviceMac,
                                       Ip6Address targetIp) {
         PiCriterion match = PiCriterion.builder()
-                .matchExact(P4InfoConstants.HDR_NDP_TARGET_ADDR, targetIp.toOctets())
+                .matchExact(PiMatchFieldId.of("hdr.ndp.target_addr"), targetIp.toOctets())
                 .build();
 
-        PiActionParam paramRouterMac = new PiActionParam(P4InfoConstants.ROUTER_MAC, deviceMac.toBytes());
+        PiActionParam paramRouterMac = new PiActionParam(
+                PiActionParamId.of("router_mac"), deviceMac.toBytes());
         PiAction action = PiAction.builder()
-                .withId(P4InfoConstants.FABRIC_INGRESS_NDP_ADVERTISEMENT)
+                .withId(PiActionId.of("FabricIngress.ndp_advertisement"))
                 .withParameter(paramRouterMac)
                 .build();
 
@@ -213,7 +218,7 @@ public class NdpReplyComponent {
 
         return DefaultFlowRule.builder()
                 .forDevice(deviceId)
-                .forTable(P4InfoConstants.FABRIC_INGRESS_NDP_REPLY)
+                .forTable(PiTableId.of("FabricIngress.ndp_reply"))
                 .fromApp(appId)
                 .makePermanent()
                 .withSelector(selector)

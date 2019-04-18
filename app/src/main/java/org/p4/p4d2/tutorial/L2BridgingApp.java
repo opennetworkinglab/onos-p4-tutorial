@@ -21,10 +21,11 @@ import org.onlab.util.SharedScheduledExecutors;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.Host;
-import org.onosproject.net.Port;
 import org.onosproject.net.PortNumber;
+import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
@@ -36,37 +37,32 @@ import org.onosproject.net.group.GroupService;
 import org.onosproject.net.host.HostEvent;
 import org.onosproject.net.host.HostListener;
 import org.onosproject.net.host.HostService;
+import org.onosproject.net.intf.Interface;
+import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
-import org.onosproject.net.pi.model.PiPipeconf;
 import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
-import org.onosproject.net.pi.runtime.PiCloneSessionEntry;
-import org.onosproject.net.pi.runtime.PiCloneSessionEntryHandle;
-import org.onosproject.net.pi.runtime.PiPreReplica;
-import org.onosproject.net.pi.service.PiPipeconfService;
-import org.onosproject.p4runtime.api.P4RuntimeClient;
-import org.onosproject.p4runtime.api.P4RuntimeController;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
 import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.p4.p4d2.tutorial.AppConstants.APP_PREFIX;
 import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
-import static org.p4.p4d2.tutorial.AppConstants.CPU_PORT_ID;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
-import static org.p4.p4d2.tutorial.AppConstants.P4RUNTIME_DEVICE_ID;
 
 @Component(immediate = true)
 public class L2BridgingApp {
@@ -87,16 +83,16 @@ public class L2BridgingApp {
     private DeviceService deviceService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private PiPipeconfService pipeconfService;
+    protected InterfaceService interfaceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    protected NetworkConfigService configService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private FlowRuleService flowRuleService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private GroupService groupService;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private P4RuntimeController p4RuntimeController;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private MastershipService mastershipService;
@@ -160,10 +156,15 @@ public class L2BridgingApp {
      * @param deviceId the device to set up
      */
     private void setUpDevice(DeviceId deviceId) {
-        log.info("Setting up L2 bridging on {}...", deviceId);
+        // We need a clone group on all switches to clone LLDP  packets for link
+        // discovery as well as ARP/NDP ones for host discovery.
+        insertCpuCloneGroup(deviceId);
 
+        if (isSpine(deviceId)) {
+            // Nothing to do. We support bridging only on leaf/tor switches.
+            return;
+        }
         insertMulticastGroup(deviceId);
-        insertCpuCloneSession(deviceId);
         insertMulticastFlowRules(deviceId);
     }
 
@@ -178,7 +179,6 @@ public class L2BridgingApp {
         flowRuleService.removeFlowRulesById(appId);
         groupService.getGroups(deviceId, appId).forEach(
                 group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
-        deleteCpuCloneSession(deviceId);
     }
 
     /**
@@ -189,6 +189,8 @@ public class L2BridgingApp {
      * @param deviceId device ID where to install the rules
      */
     private void insertMulticastFlowRules(DeviceId deviceId) {
+        log.info("Inserting L2 multicast flow rules on {}...", deviceId);
+
         // Action: set multicast group id
         final PiAction setMcastGroupAction = PiAction.builder()
                 .withId(PiActionId.of("FabricIngress.set_multicast_group"))
@@ -263,20 +265,22 @@ public class L2BridgingApp {
     }
 
     /**
-     * Inserts a BROADCAST group in the ONOS core to replicate packets on all
-     * ports known to ONOS for the given device. BROADCAST groups in ONOS are
-     * equivalent to P4Runtime Packet Replication Engine (PRE) Multicast
-     * groups.
+     * Inserts an ALL group in the ONOS core to replicate packets on all host
+     * facing ports. ALL groups in ONOS are equivalent to P4Runtime Packet
+     * Replication Engine (PRE) Multicast groups.
      *
      * @param deviceId the device where to install the group
      */
     private void insertMulticastGroup(DeviceId deviceId) {
-        // Create a set with all ports currently known for this device.
-        // We want to replicate packets on all these ports.
-        Set<PortNumber> ports = deviceService.getPorts(deviceId)
-                .stream()
-                .map(Port::number)
-                .collect(Collectors.toSet());
+        Set<PortNumber> ports = getHostFacingPorts(deviceId);
+
+        if (ports.isEmpty()) {
+            log.warn("Device {} has 0 host facing ports", deviceId);
+            return;
+        }
+
+        log.info("Creating multicast group with {} ports on {}",
+                 ports.size(), deviceId);
 
         final GroupDescription multicastGroup = Utils.forgeMulticastGroup(
                 appId, deviceId, DEFAULT_BROADCAST_GROUP_ID, ports);
@@ -285,59 +289,48 @@ public class L2BridgingApp {
     }
 
     /**
-     * Inserts a P4Runtime clone sessions to replicate packets to the CPU, i.e.
-     * to generate packet-in to ONOS (controller).
-     * <p>
-     * Since ONOS does not provide yet Suways to abstract clone sessions in its
-     * northbound and core APIs, we use directly the same P4Runtime client
-     * object used by ONOS to communicate with the device.
+     * Returns a set of ports for the given device that are used to connect
+     * hosts to the fabric.
      *
-     * @param deviceId device where to install the clone session
+     * @param deviceId device ID
+     * @return set of host facing ports
      */
-    private void insertCpuCloneSession(DeviceId deviceId) {
-        final P4RuntimeClient client = p4RuntimeController.get(deviceId);
-        final PiPipeconf pipeconf = pipeconfService.getPipeconf(deviceId).orElse(null);
-        if (pipeconf == null) {
-            log.error("Unable to insert CPU clone session in {}, missing pipeconf", deviceId);
-            return;
-        }
-        final PortNumber cpuPort = PortNumber.portNumber(CPU_PORT_ID);
-        final PiCloneSessionEntry cpuCloneSession = PiCloneSessionEntry.builder()
-                .withSessionId(CPU_CLONE_SESSION_ID)
-                .addReplica(new PiPreReplica(cpuPort, 0))
-                .build();
-        client.write(P4RUNTIME_DEVICE_ID, pipeconf)
-                .insert(cpuCloneSession)
-                .submit()
-                .thenAccept(response -> {
-                    if (!response.isSuccess()) {
-                        log.error("Unable to insert CPU clone session in {}", deviceId);
-                    }
-                });
+    private Set<PortNumber> getHostFacingPorts(DeviceId deviceId) {
+        // Get all interfaces configured via netcfg for the given device ID and
+        // return the corresponding device port number.
+        return interfaceService.getInterfaces().stream()
+                .map(Interface::connectPoint)
+                .filter(cp -> cp.deviceId().equals(deviceId))
+                .map(ConnectPoint::port)
+                .collect(Collectors.toSet());
     }
 
     /**
-     * Deletes the P4Runtime CPU clone session previously installed.
+     * Returns true if the given device is defined as a spine in the netcfg.
      *
-     * @param deviceId device where to delete the clone session
+     * @param deviceId device ID
+     * @return true if spine, false otherwise
      */
-    private void deleteCpuCloneSession(DeviceId deviceId) {
-        final P4RuntimeClient client = p4RuntimeController.get(deviceId);
-        final PiPipeconf pipeconf = pipeconfService.getPipeconf(deviceId).orElse(null);
-        if (pipeconf == null) {
-            log.error("Unable to delete CPU clone session from {}, missing pipeconf", deviceId);
-            return;
-        }
-        final PiCloneSessionEntryHandle sessionHandle = PiCloneSessionEntryHandle
-                .of(deviceId, CPU_CLONE_SESSION_ID);
-        client.write(P4RUNTIME_DEVICE_ID, pipeconf)
-                .delete(sessionHandle)
-                .submit()
-                .thenAccept(response -> {
-                    if (!response.isSuccess()) {
-                        log.error("Unable to delete CPU clone session from {}", deviceId);
-                    }
-                });
+    private boolean isSpine(DeviceId deviceId) {
+        final Srv6DeviceConfig cfg = configService.getConfig(deviceId, Srv6DeviceConfig.class);
+        return cfg != null && cfg.isSpine();
+    }
+
+    /**
+     * Inserts a CLONE group in the ONOS core to clone packets to the CPU (i.e.
+     * to ONOS via packet-in). CLONE groups in ONOS are equivalent to P4Runtime
+     * Packet Replication Engine (PRE) clone sessions.
+     *
+     * @param deviceId device where to install the clone session
+     */
+    private void insertCpuCloneGroup(DeviceId deviceId) {
+        log.info("Inserting CPU clone session on {}", deviceId);
+
+        Set<PortNumber> clonePorts = Collections.singleton(PortNumber.CONTROLLER);
+        final GroupDescription cloneGroup = Utils.forgeCloneGroup(
+                appId, deviceId, CPU_CLONE_SESSION_ID, clonePorts);
+
+        groupService.addGroup(cloneGroup);
     }
 
     /**
