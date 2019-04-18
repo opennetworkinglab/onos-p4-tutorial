@@ -20,6 +20,20 @@ cd app
 mvn clean install
 ```
 
+## Start ONOS
+
+Start ONOS with the following apps:
+
+```bash
+ONOS_APPS=gui,drivers.bmv2,lldpprovider,hostprovider
+```
+
+Set the following component configuration:
+
+```bash
+cfg set org.onosproject.provider.host.impl.HostLocationProvider requestIpv6ND true
+```
+
 ## Load the app in ONOS
 
 Once ONOS is running, you can build and load the app using the following 

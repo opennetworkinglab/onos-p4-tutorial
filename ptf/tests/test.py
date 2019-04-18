@@ -36,13 +36,23 @@ SWITCH3_MAC = "00:00:00:00:aa:03"
 HOST1_MAC = "00:00:00:00:00:01"
 HOST2_MAC = "00:00:00:00:00:02"
 
+MAC_BROADCAST = "FF:FF:FF:FF:FF:FF"
 MAC_FULL_MASK = "FF:FF:FF:FF:FF:FF"
+MAC_MULTICAST = "33:33:00:00:00:00"
+MAC_MULTICAST_MASK = "FF:FF:00:00:00:00"
 
 SWITCH1_IPV6 = "2001:0:1::1"
 SWITCH2_IPV6 = "2001:0:2::1"
 SWITCH3_IPV6 = "2001:0:3::1"
 HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
 HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
+
+ARP_ETH_TYPE = 0x0806
+IPV6_ETH_TYPE = 0x86DD
+
+ICMPV6_IP_PROTO = 58
+NS_ICMPV6_TYPE = 135
+NA_ICMPV6_TYPE = 136
 
 CPU_CLONE_SESSION_ID = 99
 
@@ -160,13 +170,27 @@ class FabricTest(P4RuntimeTest):
         self.add_l3_group_with_members(grp_id, members)
         self.add_l3_entry(dstAddr, prefix_len, grp_id)
 
-    def add_acl_cpu_entry(self, eth_type=None, clone=False):
-        eth_type_ = stringify(eth_type, 2)
-        eth_type_mask = stringify(0xFFFF, 2)
+    def add_acl_cpu_entry(self, eth_type=None, ip_proto=None, icmp_type=None,
+                          clone=False):
+        match_key = []
+        if eth_type:
+            eth_type_ = stringify(eth_type, 2)
+            eth_type_mask = stringify(0xFFFF, 2)
+            match_key.append(self.Ternary(
+                "hdr.ethernet.ether_type", eth_type_, eth_type_mask))
+        if ip_proto:
+            ip_proto_ = stringify(ip_proto, 1)
+            ip_proto_mask = stringify(0xFF, 1)
+            match_key.append(self.Ternary(
+                "fabric_metadata.ip_proto", ip_proto_, ip_proto_mask))
+        if icmp_type:
+            icmp_type_ = stringify(icmp_type, 1)
+            icmp_type_mask = stringify(0xFF, 1)
+            match_key.append(self.Ternary(
+                "fabric_metadata.icmp_type", icmp_type_, icmp_type_mask))
         action_name = "clone_to_cpu" if clone else "punt_to_cpu"
         self.send_request_add_entry_to_action(
-            "FabricIngress.acl",
-            [self.Ternary("hdr.ethernet.ether_type", eth_type_, eth_type_mask)],
+            "FabricIngress.acl", match_key,
             "FabricIngress." + action_name, [],
             DEFAULT_PRIORITY)
 
@@ -517,22 +541,28 @@ class FabricPacketInTest(FabricTest):
             self.runPacketInTest(pkt)
 
 
-class FabricArpBroadcastWithCloneTest(FabricTest):
-    """Tests ability to broadcast ARP requests as well as cloning to CPU
-    (controller) for host discovery
+class FabricArpNdpRequestWithCloneTest(FabricTest):
+    """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation as
+    well as cloning to CPU (controller) for host discovery
     """
 
     @autocleanup
-    def runTest(self):
-        pkt = testutils.simple_arp_packet()
+    def test(self, pkt):
         mcast_group_id = 10
         mcast_ports = [self.port1, self.port2, self.port3]
 
         self.add_mcast_group(group_id=mcast_group_id, ports=mcast_ports)
         self.add_l2_ternary_entry(
-            eth_dst=pkt[Ether].dst, eth_dst_mask=MAC_FULL_MASK,
+            eth_dst=MAC_BROADCAST, eth_dst_mask=MAC_FULL_MASK,
             mcast_group_id=mcast_group_id)
-        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+        self.add_l2_ternary_entry(
+            eth_dst=MAC_MULTICAST, eth_dst_mask=MAC_MULTICAST_MASK,
+            mcast_group_id=mcast_group_id)
+
+        self.add_acl_cpu_entry(eth_type=ARP_ETH_TYPE, clone=True)
+        self.add_acl_cpu_entry(
+            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
+            icmp_type=NS_ICMPV6_TYPE, clone=True)
         self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
 
         for inport in mcast_ports:
@@ -546,6 +576,18 @@ class FabricArpBroadcastWithCloneTest(FabricTest):
                 testutils.verify_packet(self, pkt, port)
         testutils.verify_no_other_packets(self)
 
+    @autocleanup
+    def runTest(self):
+        print ""
+        print "Testing ARP request packet..."
+        arp_pkt = testutils.simple_arp_packet()
+        self.test(arp_pkt)
+
+        print "Testing NDP NS packet..."
+        ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
+                              target_ip=HOST2_IPV6)
+        self.test(ndp_pkt)
+
 
 class FabricArpNdpReplyWithCloneTest(FabricTest):
     """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
@@ -555,7 +597,10 @@ class FabricArpNdpReplyWithCloneTest(FabricTest):
     @autocleanup
     def test(self, pkt):
         self.add_l2_exact_entry(pkt[Ether].dst, self.port1)
-        self.add_acl_cpu_entry(eth_type=pkt[Ether].type, clone=True)
+        self.add_acl_cpu_entry(eth_type=ARP_ETH_TYPE, clone=True)
+        self.add_acl_cpu_entry(
+            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
+            icmp_type=NA_ICMPV6_TYPE, clone=True)
         self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
 
         testutils.send_packet(self, self.port2, str(pkt))
