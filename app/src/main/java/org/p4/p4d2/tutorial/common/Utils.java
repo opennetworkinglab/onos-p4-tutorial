@@ -30,8 +30,10 @@ import org.onosproject.net.group.GroupBucket;
 import org.onosproject.net.group.GroupBuckets;
 import org.onosproject.net.group.GroupDescription;
 import org.onosproject.net.group.GroupKey;
+import org.onosproject.net.pi.model.PiActionProfileId;
 import org.onosproject.net.pi.model.PiTableId;
-import org.onosproject.net.pi.runtime.PiAction;
+import org.onosproject.net.pi.runtime.PiGroupKey;
+import org.onosproject.net.pi.runtime.PiTableAction;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -91,7 +93,8 @@ public final class Utils {
     }
 
     public static FlowRule forgeFlowRule(DeviceId switchId, ApplicationId appId,
-                                         String tableId, PiCriterion piCriterion, PiAction piAction) {
+                                         String tableId, PiCriterion piCriterion,
+                                         PiTableAction piAction) {
         return DefaultFlowRule.builder()
                 .forDevice(switchId)
                 .forTable(PiTableId.of(tableId))
@@ -103,5 +106,22 @@ public final class Utils {
                 .withTreatment(DefaultTrafficTreatment.builder()
                                        .piTableAction(piAction).build())
                 .build();
+    }
+
+    public static GroupDescription forgeSelectGroup(DeviceId deviceId,
+                                                    PiTableId tableId,
+                                                    PiActionProfileId actionProfileId,
+                                                    int groupId,
+                                                    GroupBuckets buckets,
+                                                    ApplicationId appId) {
+
+        final GroupKey groupKey = new PiGroupKey(tableId, actionProfileId, groupId);
+        return new DefaultGroupDescription(
+                deviceId,
+                GroupDescription.Type.SELECT,
+                buckets,
+                groupKey,
+                groupId,
+                appId);
     }
 }

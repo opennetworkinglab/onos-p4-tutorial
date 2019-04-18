@@ -27,6 +27,8 @@ import org.onosproject.net.DeviceId;
 import org.onosproject.net.config.NetworkConfigEvent;
 import org.onosproject.net.config.NetworkConfigListener;
 import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.DefaultFlowRule;
 import org.onosproject.net.flow.DefaultTrafficSelector;
@@ -92,18 +94,13 @@ public class NdpReplyComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected DeviceService deviceService;
 
-    private final NetworkConfigListener configListener =
-            new InternalNetworkConfigListener();
-    private final InterfaceListener interfaceListener =
-            new InternalInterfaceListener();
-
+    DeviceListener deviceListener = new InternalDeviceListener();
     private ApplicationId appId;
 
     @Activate
     public void activate() {
-        configService.addListener(configListener);
-        interfaceService.addListener(interfaceListener);
         appId = coreService.registerApplication(APP_NAME);
+        deviceService.addListener(deviceListener);
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
         log.info("Started");
@@ -111,8 +108,7 @@ public class NdpReplyComponent {
 
     @Deactivate
     public void deactivate() {
-        configService.removeListener(configListener);
-        interfaceService.removeListener(interfaceListener);
+        deviceService.removeListener(deviceListener);
         clearAllDevice();
         log.info("Stopped");
     }
@@ -227,43 +223,24 @@ public class NdpReplyComponent {
                 .build();
     }
 
-    private class InternalNetworkConfigListener implements NetworkConfigListener {
+    class InternalDeviceListener implements DeviceListener {
+
         @Override
-        public void event(NetworkConfigEvent event) {
-            Srv6DeviceConfig config = (Srv6DeviceConfig) event.config().orElse(null);
-            if (config == null || !config.isValid()) {
-                log.warn("Invalid config {}", config);
-                return;
-            }
+        public void event(DeviceEvent event) {
             switch (event.type()) {
-                case CONFIG_ADDED:
-                case CONFIG_UPDATED:
-                    processSrv6Config(config);
+                case DEVICE_ADDED:
+                case DEVICE_AVAILABILITY_CHANGED:
+                    setUpAllDevices();
                     break;
                 default:
-                    log.warn("Unknown event type {}", event.type());
+                    log.debug("Unsupported event type {}", event.type());
                     break;
             }
         }
 
         @Override
-        public boolean isRelevant(NetworkConfigEvent event) {
-            return event.configClass() == Srv6DeviceConfig.class;
-        }
-    }
-
-    private class InternalInterfaceListener implements InterfaceListener {
-        @Override
-        public void event(InterfaceEvent event) {
-            Interface iface = event.subject();
-            switch (event.type()) {
-                case INTERFACE_ADDED:
-                    processInterface(iface);
-                    break;
-                default:
-                    log.warn("Unknown event type {}", event.type());
-                    break;
-            }
+        public boolean isRelevant(DeviceEvent event) {
+            return mastershipService.isLocalMaster(event.subject().id());
         }
     }
 }
