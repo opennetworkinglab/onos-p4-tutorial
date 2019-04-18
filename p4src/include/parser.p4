@@ -84,7 +84,7 @@ parser FabricParser (packet_in packet,
 
     state mark_current_srv6 {
         // current metadata
-        fabric_metadata.next_srv6_sid = hdr.srv6_list.last.segment_id; 
+        fabric_metadata.next_srv6_sid = hdr.srv6_list.last.segment_id;
         transition check_last_srv6;
     }
 
@@ -94,13 +94,13 @@ parser FabricParser (packet_in packet,
         transition select(last_segment) {
            true: parse_srv6_next_hdr;
            false: parse_srv6_list;
-        } 
+        }
     }
     state parse_srv6_next_hdr {
         transition select(hdr.srv6h.next_hdr) {
             PROTO_TCP: parse_tcp;
             PROTO_UDP: parse_udp;
-            PROTO_ICMPV6: parse_icmp;
+            PROTO_ICMPV6: parse_icmpv6;
             default: accept;
         }
     }
@@ -126,11 +126,13 @@ parser FabricParser (packet_in packet,
 
     state parse_icmp {
         packet.extract(hdr.icmp);
+        fabric_metadata.icmp_type = hdr.icmp.type;
         transition accept;
     }
 
     state parse_icmpv6 {
         packet.extract(hdr.icmpv6);
+        fabric_metadata.icmp_type = hdr.icmpv6.type;
         transition select(hdr.icmpv6.type) {
             ICMP6_TYPE_NS: parse_ndp;
             ICMP6_TYPE_NA: parse_ndp;
