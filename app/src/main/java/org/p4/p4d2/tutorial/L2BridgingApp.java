@@ -16,7 +16,6 @@
 
 package org.p4.p4d2.tutorial;
 
-import com.google.common.collect.Sets;
 import org.onlab.packet.MacAddress;
 import org.onlab.util.SharedScheduledExecutors;
 import org.onosproject.core.ApplicationId;

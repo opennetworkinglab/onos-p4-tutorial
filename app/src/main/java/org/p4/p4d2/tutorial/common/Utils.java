@@ -93,7 +93,8 @@ public final class Utils {
     }
 
     public static FlowRule forgeFlowRule(DeviceId switchId, ApplicationId appId,
-                                         String tableId, PiCriterion piCriterion, PiAction piAction) {
+                                         String tableId, PiCriterion piCriterion,
+                                         PiTableAction piAction) {
         return DefaultFlowRule.builder()
                 .forDevice(switchId)
                 .forTable(PiTableId.of(tableId))

@@ -18,33 +18,70 @@ package org.p4.p4d2.tutorial;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Streams;
-import org.onlab.packet.*;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.Ip6Prefix;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
 import org.onlab.util.SharedScheduledExecutors;
-import org.onosproject.core.*;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
-import org.onosproject.net.*;
-import org.onosproject.net.config.*;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Host;
+import org.onosproject.net.Link;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
-import org.onosproject.net.flow.*;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
-import org.onosproject.net.group.*;
-import org.onosproject.net.host.*;
-import org.onosproject.net.intf.*;
+import org.onosproject.net.group.DefaultGroupBucket;
+import org.onosproject.net.group.GroupBucket;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupService;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostListener;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.host.InterfaceIpAddress;
+import org.onosproject.net.intf.Interface;
+import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.net.link.LinkEvent;
 import org.onosproject.net.link.LinkListener;
 import org.onosproject.net.link.LinkService;
-import org.onosproject.net.pi.model.*;
-import org.onosproject.net.pi.runtime.*;
+import org.onosproject.net.pi.model.PiActionId;
+import org.onosproject.net.pi.model.PiActionParamId;
+import org.onosproject.net.pi.model.PiActionProfileId;
+import org.onosproject.net.pi.model.PiMatchFieldId;
+import org.onosproject.net.pi.model.PiTableId;
+import org.onosproject.net.pi.runtime.PiAction;
+import org.onosproject.net.pi.runtime.PiActionParam;
+import org.onosproject.net.pi.runtime.PiActionProfileGroupId;
+import org.onosproject.net.pi.runtime.PiTableAction;
 import org.onosproject.store.service.StorageService;
-import org.osgi.service.component.annotations.*;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
 import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -175,8 +212,8 @@ public class Ipv6Routing {
         PiTableAction action = PiAction.builder().withId(PiActionId.of("NoAction")).build();
 
         FlowRule myStationRule = Utils.forgeFlowRule(deviceId,
-                appId, PiTableId.of("FabricIngress.l2_my_station"),
-                match, action);
+                                                     appId, "FabricIngress.l2_my_station",
+                                                     match, action);
 
         flowRuleService.applyFlowRules(myStationRule);
     }
@@ -238,7 +275,7 @@ public class Ipv6Routing {
         final FlowRule rule = Utils.forgeFlowRule(
                 deviceId,
                 appId,
-                PiTableId.of("FabricIngress.l2_exact_table"),
+                "FabricIngress.l2_exact_table",
                 match, action);
 
         flowRuleService.applyFlowRules(rule);
@@ -437,7 +474,7 @@ public class Ipv6Routing {
         PiTableAction action = PiActionProfileGroupId.of(nextHopGroupId);
 
         return Utils.forgeFlowRule(deviceId,
-                appId, PiTableId.of("FabricIngress.l3_table"), match, action);
+                                   appId, "FabricIngress.l3_table", match, action);
     }
 
     /**
