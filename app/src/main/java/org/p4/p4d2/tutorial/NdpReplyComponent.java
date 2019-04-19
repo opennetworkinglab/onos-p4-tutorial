@@ -24,8 +24,6 @@ import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.DeviceId;
-import org.onosproject.net.config.NetworkConfigEvent;
-import org.onosproject.net.config.NetworkConfigListener;
 import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
@@ -41,8 +39,6 @@ import org.onosproject.net.flow.TrafficTreatment;
 import org.onosproject.net.flow.criteria.PiCriterion;
 import org.onosproject.net.host.InterfaceIpAddress;
 import org.onosproject.net.intf.Interface;
-import org.onosproject.net.intf.InterfaceEvent;
-import org.onosproject.net.intf.InterfaceListener;
 import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
@@ -95,17 +91,13 @@ public class NdpReplyComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected DeviceService deviceService;
 
-    DeviceListener deviceListener = new InternalDeviceListener();
+    private DeviceListener deviceListener = new InternalDeviceListener();
     private ApplicationId appId;
 
     @Activate
     public void activate() {
         appId = coreService.registerApplication(APP_NAME);
-        try {
-            Utils.waitUntilPreviousCleanupFinished(appId, deviceService, flowRuleService, null);
-        } catch (InterruptedException e) {
-            log.warn("Get exception when clean up the app {}: {}", appId, e.getMessage());
-        }
+        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, null);
         deviceService.addListener(deviceListener);
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
@@ -154,28 +146,6 @@ public class NdpReplyComponent {
         Collection<FlowRule> flowRules = interfaces.stream()
                 .map(this::getIp6Addresses)
                 .flatMap(Collection::stream)
-                .map(iaddr -> genNdpReplyRules(deviceId, deviceMac, iaddr))
-                .collect(Collectors.toSet());
-        installRules(flowRules);
-    }
-
-    private synchronized void processInterface(Interface iface) {
-        DeviceId deviceId = iface.connectPoint().deviceId();
-        if (!mastershipService.isLocalMaster(deviceId)) {
-            // Handles by other node.
-            log.debug("Ignores device {} since it is not belong to this node.", deviceId);
-            return;
-        }
-
-        Srv6DeviceConfig config = configService.getConfig(deviceId, Srv6DeviceConfig.class);
-        if (config == null) {
-            // Config not available yet
-            return;
-        }
-
-        MacAddress deviceMac = config.myStationMac();
-        Collection<FlowRule> flowRules = getIp6Addresses(iface)
-                .stream()
                 .map(iaddr -> genNdpReplyRules(deviceId, deviceMac, iaddr))
                 .collect(Collectors.toSet());
         installRules(flowRules);
