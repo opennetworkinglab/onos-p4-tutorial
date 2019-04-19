@@ -114,6 +114,7 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
+    direct_counter(CounterType.packets_and_bytes) l3_table_counter;
     table l3_table {
       key = {
           hdr.ipv6.dst_addr: lpm;
@@ -130,6 +131,7 @@ control FabricIngress (inout parsed_headers_t hdr,
           set_l2_next_hop;
       }
       implementation = ecmp_selector;
+      counters = l3_table_counter;
     }
 
     action srv6_end() {

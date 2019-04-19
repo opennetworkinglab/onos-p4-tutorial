@@ -27,6 +27,7 @@ import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
+import org.onosproject.net.group.DefaultGroupBucket;
 import org.onosproject.net.group.DefaultGroupDescription;
 import org.onosproject.net.group.DefaultGroupKey;
 import org.onosproject.net.group.GroupBucket;
@@ -36,6 +37,7 @@ import org.onosproject.net.group.GroupKey;
 import org.onosproject.net.group.GroupService;
 import org.onosproject.net.pi.model.PiActionProfileId;
 import org.onosproject.net.pi.model.PiTableId;
+import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiGroupKey;
 import org.onosproject.net.pi.runtime.PiTableAction;
 import org.slf4j.Logger;
@@ -44,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -56,7 +57,9 @@ import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_CLEAN_UP_RETRY_TIMES;
 import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_FLOW_RULE_PRIORITY;
 
 public final class Utils {
+
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
     public static GroupDescription forgeMulticastGroup(
             ApplicationId appId,
             DeviceId deviceId,
@@ -118,28 +121,32 @@ public final class Utils {
     }
 
     public static GroupDescription forgeSelectGroup(DeviceId deviceId,
-                                                    PiTableId tableId,
-                                                    PiActionProfileId actionProfileId,
+                                                    String tableId,
+                                                    String actionProfileId,
                                                     int groupId,
-                                                    GroupBuckets buckets,
+                                                    Collection<PiAction> actions,
                                                     ApplicationId appId) {
 
-        final GroupKey groupKey = new PiGroupKey(tableId, actionProfileId, groupId);
+        final GroupKey groupKey = new PiGroupKey(
+                PiTableId.of(tableId), PiActionProfileId.of(actionProfileId), groupId);
+        final List<GroupBucket> buckets = actions.stream()
+                .map(action -> DefaultTrafficTreatment.builder()
+                        .piTableAction(action).build())
+                .map(DefaultGroupBucket::createSelectGroupBucket)
+                .collect(Collectors.toList());
         return new DefaultGroupDescription(
                 deviceId,
                 GroupDescription.Type.SELECT,
-                buckets,
+                new GroupBuckets(buckets),
                 groupKey,
                 groupId,
                 appId);
     }
 
-    public static void waitUntilPreviousCleanupFinished(ApplicationId appId,
-                                                        DeviceService deviceService,
-                                                        FlowRuleService flowRuleService,
-                                                        GroupService groupService)
-            throws InterruptedException {
-        log.info("Cleaning up flows and groups for app {}", appId.name());
+    public static void waitPreviousCleanup(ApplicationId appId,
+                                           DeviceService deviceService,
+                                           FlowRuleService flowRuleService,
+                                           GroupService groupService) {
         int retry = DEFAULT_CLEAN_UP_RETRY_TIMES;
         while (retry != 0) {
             boolean existAnyFlows = flowRuleService.getFlowEntriesById(appId).iterator().hasNext();
@@ -155,10 +162,17 @@ public final class Utils {
             if (!existAnyFlows && !existAnyGroups) {
                 break;
             }
-
-            Thread.sleep(CLEAN_UP_DELAY);
+            log.info("Waiting to remove flows and groups from " +
+                             "previous execution of {}...", appId.name());
+            try {
+                Thread.sleep(CLEAN_UP_DELAY);
+            } catch (InterruptedException e) {
+                log.error("Clean up interrupted!", e);
+                Thread.currentThread().interrupt();
+                return;
+            }
             --retry;
         }
-        log.info("Clean up done ({})", appId.name());
+        log.debug("Clean up done ({})", appId.name());
     }
 }

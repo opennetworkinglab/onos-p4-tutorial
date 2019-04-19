@@ -16,8 +16,6 @@
 
 package org.p4.p4d2.tutorial;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Streams;
 import org.onlab.packet.Ip6Address;
 import org.onlab.packet.Ip6Prefix;
 import org.onlab.packet.IpAddress;
@@ -34,15 +32,11 @@ import org.onosproject.net.Link;
 import org.onosproject.net.PortNumber;
 import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceService;
-import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleOperations;
 import org.onosproject.net.flow.FlowRuleOperationsContext;
 import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
-import org.onosproject.net.group.DefaultGroupBucket;
-import org.onosproject.net.group.GroupBucket;
-import org.onosproject.net.group.GroupBuckets;
 import org.onosproject.net.group.GroupDescription;
 import org.onosproject.net.group.GroupService;
 import org.onosproject.net.host.HostEvent;
@@ -56,9 +50,7 @@ import org.onosproject.net.link.LinkListener;
 import org.onosproject.net.link.LinkService;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
-import org.onosproject.net.pi.model.PiActionProfileId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
-import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
 import org.onosproject.net.pi.runtime.PiActionProfileGroupId;
@@ -77,14 +69,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import static org.p4.p4d2.tutorial.AppConstants.CLEAN_UP_DELAY;
+import static com.google.common.collect.Streams.stream;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 /**
@@ -92,8 +82,11 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  */
 @Component(immediate = true)
 public class Ipv6Routing {
+
     private static final Logger log = LoggerFactory.getLogger(Ipv6Routing.class);
+
     private static final String APP_NAME = AppConstants.APP_PREFIX + ".ipv6routing";
+
     private static final long GROUP_INSTALLATION_DELAY = 500;
     private static final int DEFAULT_ECMP_GROUP_ID = 0xec3b0000;
 
@@ -127,22 +120,25 @@ public class Ipv6Routing {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private LinkService linkService;
 
+    private final HostListener hostListener = new InternalHostListener();
+    private final LinkListener linkListener = new InternalLinkListener();
+
     private ApplicationId appId;
-    private HostListener hostListener = new InternalHostListener();
-    private LinkListener linkListener = new InternalLinkListener();
 
     @Activate
     protected void activate() {
         appId = coreService.registerApplication(APP_NAME);
-        try {
-            Utils.waitUntilPreviousCleanupFinished(appId, deviceService, flowRuleService, groupService);
-        } catch (InterruptedException e) {
-            log.warn("Get exception when clean up the app {}: {}", appId, e.getMessage());
-        }
+
+        // Wait to remove flow and groups from previous executions.
+        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, groupService);
+
         hostService.addListener(hostListener);
         linkService.addListener(linkListener);
+
+        // Schedule set up for all devices.
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
+
         log.info("Started");
     }
 
@@ -150,16 +146,19 @@ public class Ipv6Routing {
     protected void deactivate() {
         hostService.removeListener(hostListener);
         linkService.removeListener(linkListener);
-        clearAllDevices();
+
+        cleanUpAllDevices();
+
         log.info("Stopped");
     }
 
     /**
-     * Initialize all devices.
+     * Sets up IPv6 routing on all devices known by ONOS and for which this ONOS
+     * node instance is currently master.
      */
     private synchronized void setUpAllDevices() {
         // Set up host routes
-        Streams.stream(deviceService.getAvailableDevices())
+        stream(deviceService.getAvailableDevices())
                 .map(Device::id)
                 .filter(mastershipService::isLocalMaster)
                 .forEach(deviceId -> {
@@ -171,11 +170,11 @@ public class Ipv6Routing {
     }
 
     /**
-     * Remove all flow rules and groups installed by this app.
+     * Cleans up IPv6 routing runtime configuration from all for which this ONOS
+     * node instance is currently master.
      */
-    private void clearAllDevices() {
-        Collection<DeviceId> deviceIds = Streams
-                .stream(deviceService.getAvailableDevices())
+    private void cleanUpAllDevices() {
+        Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
                 .map(Device::id)
                 .filter(mastershipService::isLocalMaster)
                 .collect(Collectors.toSet());
@@ -185,12 +184,12 @@ public class Ipv6Routing {
             FlowRuleOperationsContext callback = new FlowRuleOperationsContext() {
                 @Override
                 public void onSuccess(FlowRuleOperations ops) {
-                    Streams.stream(groupService.getGroups(deviceId, appId))
-                            .filter(group -> group.appId().equals(appId))
-                            .forEach(group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
+                    groupService.getGroups(deviceId, appId)
+                            .forEach(group -> groupService.removeGroup(
+                                    deviceId, group.appCookie(), appId));
                 }
             };
-            Streams.stream(flowRuleService.getFlowEntries(deviceId))
+            stream(flowRuleService.getFlowEntries(deviceId))
                     .filter(fe -> fe.appId() == appId.id())
                     .forEach(ops::remove);
             flowRuleService.apply(ops.build(callback));
@@ -198,24 +197,26 @@ public class Ipv6Routing {
     }
 
     /**
-     * Set up my station table for a device.
+     * Sets up my station table for the given device with the myStationMac
+     * address found in the config.
      *
      * @param deviceId the device Id
      */
     private void setUpMyStationTable(DeviceId deviceId) {
-        MacAddress myStationMac = getDeviceMac(deviceId).orElse(null);
-        if (myStationMac == null) {
-            log.debug("Can not find my station mac for device {}", deviceId);
-            return;
-        }
-        PiCriterion match = PiCriterion.builder()
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"), myStationMac.toBytes())
-                .build();
-        PiTableAction action = PiAction.builder().withId(PiActionId.of("NoAction")).build();
+        MacAddress myStationMac = getMyStationMac(deviceId);
 
-        FlowRule myStationRule = Utils.forgeFlowRule(deviceId,
-                                                     appId, "FabricIngress.l2_my_station",
-                                                     match, action);
+        PiCriterion match = PiCriterion.builder()
+                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                            myStationMac.toBytes())
+                .build();
+        PiTableAction action = PiAction.builder()
+                .withId(PiActionId.of("NoAction"))
+                .build();
+
+        FlowRule myStationRule = Utils.forgeFlowRule(
+                deviceId, appId,
+                "FabricIngress.l2_my_station",
+                match, action);
 
         flowRuleService.applyFlowRules(myStationRule);
     }
@@ -223,60 +224,58 @@ public class Ipv6Routing {
     /**
      * Set up nexthop rules of a device.
      *
-     * @param deviceId the device id
+     * @param deviceId the device ID
      */
     private void setUpNextHopRules(DeviceId deviceId) {
         deviceService.getAvailableDevices().forEach(dstDevice -> {
-            DeviceId dstDeviceId = dstDevice.id();
+            DeviceId nextHop = dstDevice.id();
+            // Find any link from this device to the next hop, if any.
             Set<Link> egressLinks = linkService.getDeviceEgressLinks(deviceId);
-            Link linkConnectToDst = egressLinks.stream()
-                    .filter(link -> link.dst().deviceId().equals(dstDeviceId))
-                    .findFirst()
+            Link linkToNextHop = egressLinks.stream()
+                    .filter(link -> link.dst().deviceId().equals(nextHop))
+                    .findAny()
                     .orElse(null);
 
-            if (linkConnectToDst == null) {
-                // destination invalid, the link may not comes up yet
-                log.debug("Can't find link between {} and {}", deviceId, dstDeviceId);
+            if (linkToNextHop == null) {
+                // Maybe we are still waiting to discover that link?
+                log.debug("No link from {} to next hop {}", deviceId, nextHop);
                 return;
             }
+            // Get port of this device connecting to next hop.
+            PortNumber outPort = linkToNextHop.src().port();
 
-            MacAddress dstDeviceMac = getDeviceMac(dstDeviceId).orElse(null);
-            if (dstDeviceMac == null) {
-                log.debug("Can not find device mac for device {}", dstDeviceId);
-                return;
-            }
-            // Gets output port from first link of path
-            PortNumber outputPort = linkConnectToDst.src().port();
-            setUpNexthopRule(deviceId, dstDeviceMac, outputPort);
+            MacAddress nextHopMac = getMyStationMac(nextHop);
+            insertNextHopRule(deviceId, nextHopMac, outPort);
         });
     }
 
     /**
-     * Set up nexthop rule for a device with given mac and port.
+     * Insert a next hope flow rule in the L2 table, matching on the given
+     * destination MAC and with the given output port.
      *
      * @param deviceId the device
-     * @param dstMac the destination mac
-     * @param outputPort the output port
+     * @param dstMac   the next hop (destination) mac
+     * @param outPort  the output port
      */
-    private void setUpNexthopRule(DeviceId deviceId, MacAddress dstMac,
-                                  PortNumber outputPort) {
+    private void insertNextHopRule(DeviceId deviceId, MacAddress dstMac,
+                                   PortNumber outPort) {
 
-        // Matches mac address of the next hop.
+        // Match: MAC address of next hop.
         PiCriterion match = PiCriterion.builder()
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"), dstMac.toBytes())
+                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                            dstMac.toBytes())
                 .build();
 
-        // Sets output port action
+        // Action: set_output_port
         PiActionParam param = new PiActionParam(PiActionParamId.of("port_num"),
-                outputPort.toLong());
+                                                outPort.toLong());
         PiAction action = PiAction.builder()
                 .withId(PiActionId.of("FabricIngress.set_output_port"))
                 .withParameter(param)
                 .build();
 
         final FlowRule rule = Utils.forgeFlowRule(
-                deviceId,
-                appId,
+                deviceId, appId,
                 "FabricIngress.l2_exact_table",
                 match, action);
 
@@ -285,60 +284,61 @@ public class Ipv6Routing {
 
     private void setUpHostRulesOnDevice(DeviceId deviceId) {
         hostService.getConnectedHosts(deviceId)
-                .forEach(this::setUpHostRules);
+                .forEach(host -> setUpHostRules(deviceId, host));
     }
 
     /**
-     * Set up rules for host which connect to the switch.
+     * Sets up the given device with the necessary rules to route packets to the
+     * given host.
      *
-     * @param host the host
+     * @param deviceId deviceId the device ID
+     * @param host     the host
      */
-    private void setUpHostRules(Host host) {
+    private void setUpHostRules(DeviceId deviceId, Host host) {
         MacAddress hostMac = host.mac();
-        DeviceId hostDevice = host.location().deviceId();
 
-
-        // Get all IPv6 address from the host
-        Collection<Ip6Address> hostIpv6s = host.ipAddresses()
+        // Get all IPv6 addresses associated to this host. In this tutorial we
+        // use hosts with onle 1 IPv6 address.
+        Collection<Ip6Address> hostIpv6Addresses = host.ipAddresses()
                 .stream()
                 .filter(IpAddress::isIp6)
                 .map(IpAddress::getIp6Address)
                 .collect(Collectors.toSet());
 
-        if (hostIpv6s.isEmpty()) {
-            log.info("No IPV6 addresses for the host {}, skip", hostMac);
+        if (hostIpv6Addresses.isEmpty()) {
+            // Ignore.
+            log.debug("No IPv6 addresses for host {}, ignore", hostMac);
             return;
         } else {
-            log.info("Setting up host route: {} with IPv6: {}", hostMac, hostIpv6s);
+            log.info("Setting up routes on {} for host {} [{}]",
+                     deviceId, host, hostIpv6Addresses);
         }
 
-        int groupId = createGroupIdFromNextHopMac(hostMac);
-        GroupDescription group = createNextHopGroups(groupId, hostMac, hostDevice);
+        // Create a group with only one member.
+        int groupId = macToGroupId(hostMac);
+        GroupDescription group = createNextHopGroup(
+                groupId, Collections.singleton(hostMac), deviceId);
 
-        // Creates rules for the host
-        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-        hostIpv6s.stream()
+        // Map each address to corresponding /128 prefix and obtain a flow rule
+        // that points to the group ID.
+        List<FlowRule> flowRules = hostIpv6Addresses.stream()
                 .map(IpAddress::toIpPrefix)
                 .filter(IpPrefix::isIp6)
                 .map(IpPrefix::getIp6Prefix)
-                .map(ipPrefix -> createIpv6RoutingRule(groupId, ipPrefix, hostDevice))
-                .forEach(ops::add);
+                .map(prefix -> createRoutingRule(deviceId, prefix, groupId))
+                .collect(Collectors.toList());
 
-        installGroupAndFlows(group, ops.build());
+        // Helper function to install flows after group.
+        insertInOrder(group, flowRules);
     }
 
     /**
      * Set up routes on a device.
      *
-     * @param deviceId the device id.
+     * @param deviceId the device ID.
      */
     private void setUpRoute(DeviceId deviceId) {
-        Optional<Boolean> isSpineOrUnknown = isSpine(deviceId);
-        if (!isSpineOrUnknown.isPresent()) {
-            log.debug("No device config found, cannot set up the route on the device {}", deviceId);
-            return;
-        }
-        if (isSpineOrUnknown.get()) {
+        if (isSpine(deviceId)) {
             setUpSpineRoutes(deviceId);
         } else {
             setUpLeafRoutes(deviceId);
@@ -346,176 +346,183 @@ public class Ipv6Routing {
     }
 
     /**
-     * Install route rules for spine.
+     * Install routing rules on the given spine switch, for each leaf interface
+     * subnet.
      *
-     * @param spineDeviceId the spine device id
+     * @param spineId the spine device id
      */
-    private void setUpSpineRoutes(DeviceId spineDeviceId) {
-        log.info("Setting up spine routes: {}", spineDeviceId);
+    private void setUpSpineRoutes(DeviceId spineId) {
+        log.info("Setting up spine routes: {}", spineId);
 
-        deviceService.getDevices().forEach(device -> {
-            if (isSpine(device.id()).orElse(true)) {
-                // skip if it is a spine or unknown
-                return;
+        for (Device device : deviceService.getDevices()) {
+            if (isSpine(device.id())) {
+                // We only need routes to leaf switches. Next device.
+                continue;
             }
-            DeviceId leafDeviceId = device.id();
-            Set<Ip6Prefix> subnetSet = getDeviceSubnet(leafDeviceId);
-            MacAddress leafMac = getDeviceMac(leafDeviceId).orElse(null);
+            DeviceId leafId = device.id();
+            MacAddress leafMac = getMyStationMac(leafId);
+            Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
 
-            if (leafMac == null) {
-                log.debug("Cannot fine mac address for leaf {}, skip", leafDeviceId);
-                return;
-            }
-
-            if (subnetSet.isEmpty()) {
-                log.debug("No subnet found on leaf {}, skip", leafDeviceId);
-                return;
+            if (subnetsToRoute.isEmpty()) {
+                // No subnets on this leaf switch. Next device.
+                continue;
             }
 
-            int groupId = createGroupIdFromNextHopMac(leafMac);
-            GroupDescription group = createNextHopGroups(groupId, leafMac, spineDeviceId);
+            // Create a group with only one member.
+            int groupId = macToGroupId(leafMac);
+            GroupDescription group = createNextHopGroup(
+                    groupId, Collections.singleton(leafMac), spineId);
 
-            FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-            subnetSet.forEach(subnet -> {
-                ops.add(createIpv6RoutingRule(groupId, subnet, spineDeviceId));
-            });
+            List<FlowRule> flowRules = subnetsToRoute.stream()
+                    .map(subnet -> createRoutingRule(spineId, subnet, groupId))
+                    .collect(Collectors.toList());
 
-            installGroupAndFlows(group, ops.build());
-        });
+            insertInOrder(group, flowRules);
+        }
     }
 
     /**
      * Install route rules for a leaf device.
      *
-     * @param leafDeviceId the leaf device id
+     * @param leafId the leaf device id
      */
-    private void setUpLeafRoutes(DeviceId leafDeviceId) {
-        log.info("Setting up leaf routes: {}", leafDeviceId);
-        // Collect mac address from spines
-        Set<MacAddress> spineMacs =
-                Streams.stream(deviceService.getDevices())
-                        .map(Device::id)
-                        .filter(deviceId -> isSpine(deviceId).orElse(false))
-                        .map(deviceId -> getDeviceMac(deviceId).orElse(null))
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
+    private void setUpLeafRoutes(DeviceId leafId) {
+        log.info("Setting up leaf routes: {}", leafId);
 
-        if (spineMacs.isEmpty()) {
-            // No mac address for spine found, the spine may not be configured yet.
-            return;
-        }
+        // Get MAC address of all spines.
+        Set<MacAddress> spineMacs = stream(deviceService.getDevices())
+                .map(Device::id)
+                .filter(this::isSpine)
+                .map(this::getMyStationMac)
+                .collect(Collectors.toSet());
 
-        GroupDescription group =
-                createNextHopGroups(DEFAULT_ECMP_GROUP_ID, spineMacs, leafDeviceId);
+        // Create an ECMP group to distribute traffic across all spines.
+        final int groupId = DEFAULT_ECMP_GROUP_ID;
+        final GroupDescription ecmpGroup = createNextHopGroup(
+                groupId, spineMacs, leafId);
 
-        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-        deviceService.getAvailableDevices().forEach(device -> {
-            if (device.id().equals(leafDeviceId)) {
-                // don't need to install route for leaf itself
-                return;
-            }
-            Set<Ip6Prefix> subnets = getDeviceSubnet(device.id());
-            subnets.forEach(subnet -> {
-                ops.add(createIpv6RoutingRule(DEFAULT_ECMP_GROUP_ID, subnet, leafDeviceId));
-            });
-        });
+        // Get the set of subnets (interface IPv6 prefixes) associated to other
+        // leafs but not this one.
+        Set<Ip6Prefix> subnetsToRouteViaSpines = stream(deviceService.getDevices())
+                .map(Device::id)
+                .filter(this::isLeaf)
+                .filter(deviceId -> !deviceId.equals(leafId))
+                .map(this::getInterfaceIpv6Prefixes)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
 
-        installGroupAndFlows(group, ops.build());
-    }
-
-    /**
-     * Creates next hop group with a single next hop.
-     *
-     * @param nextHop the mac address of next hop
-     * @param deviceId the device to install the group
-     * @return an ECMP group with single set_l2_next_hop group member
-     */
-    private GroupDescription createNextHopGroups(int groupId, MacAddress nextHop, DeviceId deviceId) {
-        return createNextHopGroups(groupId, Collections.singleton(nextHop), deviceId);
-    }
-
-    /**
-     * Creates next hop group with multiple next hops.
-     *
-     * @param nextHops the collection of mac address of next hops
-     * @param deviceId the device to install the group
-     * @return an ECMP group with one or more set_l2_next_hop group member
-     */
-    private GroupDescription createNextHopGroups(int groupId, Collection<MacAddress> nextHops, DeviceId deviceId) {
-        Preconditions.checkState(!nextHops.isEmpty(), "Nex thop list can not be empty");
-
-        // Create list of buckets, each bucket sets different next hop address.
-        final List<GroupBucket> bucketList = nextHops.stream()
-                .map(mac -> new PiActionParam(PiActionParamId.of("dmac"), mac.toBytes()))
-                .map(param -> PiAction.builder()
-                        .withId(PiActionId.of("FabricIngress.set_l2_next_hop"))
-                        .withParameter(param).build())
-                .map(action -> DefaultTrafficTreatment.builder()
-                        .piTableAction(action).build())
-                .map(DefaultGroupBucket::createSelectGroupBucket)
+        // Generate a flow rule for each subnet to using the ECMP group as
+        // action.
+        List<FlowRule> flowRules = subnetsToRouteViaSpines.stream()
+                .map(subnet -> createRoutingRule(leafId, subnet, groupId))
                 .collect(Collectors.toList());
-        GroupBuckets buckets = new GroupBuckets(bucketList);
+
+        insertInOrder(ecmpGroup, flowRules);
+    }
+
+    /**
+     * Creates an ONOS SELECT group to provide ECMP forwarding for the given
+     * collection of next hop MAC addresses. ONOS SELECT groups are equivalent
+     * to P4Runtime action selector groups.
+     *
+     * @param nextHopMacs the collection of mac addresses of next hops
+     * @param deviceId    the device where the group will be installed
+     * @return a SELECT group
+     */
+    private GroupDescription createNextHopGroup(
+            int groupId, Collection<MacAddress> nextHopMacs, DeviceId deviceId) {
+
+        // From P4Info.
+        String tableId = "FabricIngress.l3_table";
+        String actionProfileId = "FabricIngress.ecmp_selector";
+        String setNextHopAction = "FabricIngress.set_l2_next_hop";
+        String dmacParam = "dmac";
+
+        // Create a list of actions for each next hop.
+        final List<PiAction> actions = nextHopMacs.stream()
+                .map(nextHopMac -> PiAction.builder()
+                        .withId(PiActionId.of(setNextHopAction))
+                        .withParameter(new PiActionParam(
+                                PiActionParamId.of(dmacParam),
+                                nextHopMac.toBytes()))
+                        .build())
+                .collect(Collectors.toList());
 
         return Utils.forgeSelectGroup(
-                deviceId,
-                PiTableId.of("FabricIngress.l3_table"),
-                PiActionProfileId.of("FabricIngress.ecmp_selector"),
-                groupId,
-                buckets,
-                appId);
+                deviceId, tableId, actionProfileId, groupId, actions, appId);
     }
 
     /**
-     * Creates a routing rules for an IPv6 prefix and a next hop group.
+     * Creates a routing flow rule that matches on the given IPv6 prefix and
+     * executes the given group ID.
      *
-     * @param nextHopGroupId the group id point to the next hop group
-     * @param ip6Prefix prefix of a route
-     * @param deviceId the device to install the rule
-     * @return a routing rule of the l3_table
+     * @param deviceId  the device where flow rule will be installed
+     * @param ip6Prefix the IPv6 prefix
+     * @param groupId   the group ID
+     * @return a flow rule
      */
-    private FlowRule createIpv6RoutingRule(int nextHopGroupId,
-                                           Ip6Prefix ip6Prefix,
-                                           DeviceId deviceId) {
+    private FlowRule createRoutingRule(
+            DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
 
-        // Matches an IPv6 with prefix length.
+        // From P4Info.
+        String matchFieldId = "hdr.ipv6.dst_addr";
+        String tableId = "FabricIngress.l3_table";
+
+        // Match: LPM on IPv6 address.
         PiCriterion match = PiCriterion.builder()
-                .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
-                        ip6Prefix.address().toOctets(),
-                        ip6Prefix.prefixLength())
+                .matchLpm(PiMatchFieldId.of(matchFieldId),
+                          ip6Prefix.address().toOctets(),
+                          ip6Prefix.prefixLength())
                 .build();
 
-        // Sets next hop group.
-        PiTableAction action = PiActionProfileGroupId.of(nextHopGroupId);
+        // Action: set action profile group ID
+        PiTableAction action = PiActionProfileGroupId.of(groupId);
 
-        return Utils.forgeFlowRule(deviceId,
-                                   appId, "FabricIngress.l3_table", match, action);
+        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
     }
 
     /**
-     * Indicate that the device is a spine or not.
+     * Returns true if the given device has isSpine flag set to true in config,
+     * false otherwise.
      *
-     * @param deviceId the device id
+     * @param deviceId the device ID
      * @return true if the device is a spine, false otherwise
      */
-    private Optional<Boolean> isSpine(DeviceId deviceId) {
-        return getDeviceConfig(deviceId).map(Srv6DeviceConfig::isSpine);
+    private boolean isSpine(DeviceId deviceId) {
+        return getDeviceConfig(deviceId).map(Srv6DeviceConfig::isSpine)
+                .orElseThrow(() -> new RuntimeException(
+                        "Missing isSpine config for " + deviceId));
     }
 
     /**
-     * Gets device mac address (my station mac).
+     * Returns true if the given device is not configured as spine.
      *
-     * @param deviceId the device id
-     * @return device mac address
+     * @param deviceId the device ID
+     * @return true if the device is a leaf, false otherwise
      */
-    private Optional<MacAddress> getDeviceMac(DeviceId deviceId) {
-        return getDeviceConfig(deviceId).map(Srv6DeviceConfig::myStationMac);
+    private boolean isLeaf(DeviceId deviceId) {
+        return !isSpine(deviceId);
     }
 
     /**
-     * Gets device config of a device.
+     * Returns the MAC address configured in the "myStationMac" property of the
+     * given device config.
      *
-     * @param deviceId the device id
-     * @return device config
+     * @param deviceId the device ID
+     * @return MyStation MAC address
+     */
+    private MacAddress getMyStationMac(DeviceId deviceId) {
+        return getDeviceConfig(deviceId)
+                .map(Srv6DeviceConfig::myStationMac)
+                .orElseThrow(() -> new RuntimeException(
+                        "Missing myStationMac config for " + deviceId));
+    }
+
+    /**
+     * Returns the Srv6 config for the given device.
+     *
+     * @param deviceId the device ID
+     * @return Srv6  device config
      */
     private Optional<Srv6DeviceConfig> getDeviceConfig(DeviceId deviceId) {
         Srv6DeviceConfig config = networkConfigService.getConfig(deviceId, Srv6DeviceConfig.class);
@@ -523,12 +530,13 @@ public class Ipv6Routing {
     }
 
     /**
-     * Gets a set of subnet from interfaces which fro specific device.
+     * Returns the set of IPv6 subnets (prefixes) configured for the given
+     * device.
      *
-     * @param deviceId the device id
-     * @return a set of subnet
+     * @param deviceId the device ID
+     * @return set of IPv6 prefixes
      */
-    private Set<Ip6Prefix> getDeviceSubnet(DeviceId deviceId) {
+    private Set<Ip6Prefix> getInterfaceIpv6Prefixes(DeviceId deviceId) {
         return interfaceService.getInterfaces().stream()
                 .filter(iface -> iface.connectPoint().deviceId().equals(deviceId))
                 .map(Interface::ipAddressesList)
@@ -540,56 +548,66 @@ public class Ipv6Routing {
     }
 
     /**
-     * Creates a single next hop group id from a mac address.
+     * Returns a 32 bit bit group ID from the given MAC address.
      *
-     * @param mac the mac address
-     * @return a group id for the next hop
+     * @param mac the MAC address
+     * @return an integer
      */
-    private int createGroupIdFromNextHopMac(MacAddress mac) {
+    private int macToGroupId(MacAddress mac) {
         return mac.hashCode() & 0x7fffffff;
     }
 
     /**
-     * Installs groups and apply flow operations.
+     * Inserts the given groups and flow rules in order, groups first, then flow
+     * rules. In P4Runtime, when operating on an indirect table (i.e. with
+     * action selectors), groups must be inserted before table entries.
      *
-     * @param group the group
-     * @param ops the flow operations
+     * @param group     the group
+     * @param flowRules the flow rules depending on the group
      */
-    private void installGroupAndFlows(GroupDescription group, FlowRuleOperations ops) {
+    private void insertInOrder(GroupDescription group, Collection<FlowRule> flowRules) {
         try {
             groupService.addGroup(group);
+            // Wait for groups to be inserted.
             Thread.sleep(GROUP_INSTALLATION_DELAY);
-            flowRuleService.apply(ops);
+            flowRules.forEach(flowRuleService::applyFlowRules);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            log.error("Interrupted!", e);
+            Thread.currentThread().interrupt();
         }
     }
 
     /**
-     * Host listener which listens HOST_ADD event.
+     * Listener of host events which triggers configuration of routing rules on
+     * the device where the host is attached.
      */
     class InternalHostListener implements HostListener {
         @Override
         public void event(HostEvent event) {
+            Host host = event.subject();
+            DeviceId deviceId = host.location().deviceId();
             switch (event.type()) {
                 case HOST_ADDED:
                 case HOST_UPDATED:
-                    setUpHostRules(event.subject());
+                    setUpHostRules(deviceId, host);
                     break;
                 default:
-                    log.warn("Unsupported event type {}", event.type());
-                    break;
+                    // Ignore other events.
             }
         }
 
         @Override
         public boolean isRelevant(HostEvent event) {
-            return mastershipService.isLocalMaster(event.subject().location().deviceId());
+            // Consider only events where this ONOS instance is master for
+            // the device where the host is attached to.
+            Host host = event.subject();
+            return mastershipService.isLocalMaster(host.location().deviceId());
         }
     }
 
     /**
-     * Link listener which listens LINK_ADDED event.
+     * Listener of link events.
+     * FIXME: Do we need to rely on device events as well?
      */
     class InternalLinkListener implements LinkListener {
 
@@ -611,8 +629,7 @@ public class Ipv6Routing {
                     }
                     break;
                 default:
-                    log.debug("Unsupported event type {}", event.type());
-                    break;
+                    // Ignore other events.
             }
         }
     }
