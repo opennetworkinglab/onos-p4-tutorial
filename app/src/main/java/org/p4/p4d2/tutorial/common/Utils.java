@@ -16,6 +16,7 @@
 
 package org.p4.p4d2.tutorial.common;
 
+import com.google.common.collect.Lists;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
@@ -30,6 +31,7 @@ import org.onosproject.net.flow.criteria.PiCriterion;
 import org.onosproject.net.group.DefaultGroupBucket;
 import org.onosproject.net.group.DefaultGroupDescription;
 import org.onosproject.net.group.DefaultGroupKey;
+import org.onosproject.net.group.Group;
 import org.onosproject.net.group.GroupBucket;
 import org.onosproject.net.group.GroupBuckets;
 import org.onosproject.net.group.GroupDescription;
@@ -149,30 +151,43 @@ public final class Utils {
                                            GroupService groupService) {
         int retry = DEFAULT_CLEAN_UP_RETRY_TIMES;
         while (retry != 0) {
-            boolean existAnyFlows = flowRuleService.getFlowEntriesById(appId).iterator().hasNext();
-            boolean existAnyGroups = false;
+            Collection<FlowRule> flows = Lists.newArrayList(
+                    flowRuleService.getFlowEntriesById(appId).iterator());
 
+            Collection<Group> groups = Lists.newArrayList();
             if (groupService != null) {
                 for (Device device : deviceService.getAvailableDevices()) {
-                    existAnyGroups = existAnyGroups ||
-                            groupService.getGroups(device.id(), appId).iterator().hasNext();
+                    groupService.getGroups(device.id(), appId).forEach(groups::add);
                 }
             }
 
-            if (!existAnyFlows && !existAnyGroups) {
+            if (flows.isEmpty() && groups.isEmpty()) {
                 break;
             }
-            log.info("Waiting to remove flows and groups from " +
-                             "previous execution of {}...", appId.name());
-            try {
-                Thread.sleep(CLEAN_UP_DELAY);
-            } catch (InterruptedException e) {
-                log.error("Clean up interrupted!", e);
-                Thread.currentThread().interrupt();
-                return;
+
+            flows.forEach(flowRuleService::removeFlowRules);
+            if (!groups.isEmpty() && groupService != null) {
+                // Wait for flows to be removed in case those depend on groups.
+                sleep(1000);
+                groups.forEach(g -> groupService.removeGroup(
+                        g.deviceId(), g.appCookie(), g.appId()));
             }
+
+            log.info("Waiting to remove {} flows and {} groups from " +
+                             "previous execution of {}...",
+                     flows.size(), groups.size(), appId.name());
+            sleep(CLEAN_UP_DELAY);
             --retry;
         }
         log.debug("Clean up done ({})", appId.name());
+    }
+
+    public static void sleep(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            log.error("Interrupted!", e);
+            Thread.currentThread().interrupt();
+        }
     }
 }

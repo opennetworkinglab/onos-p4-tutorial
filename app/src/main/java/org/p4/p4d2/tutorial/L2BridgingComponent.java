@@ -64,7 +64,7 @@ import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 @Component(immediate = true)
-public class L2BridgingApp {
+public class L2BridgingComponent {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -111,7 +111,6 @@ public class L2BridgingApp {
         // Set up any existing device which is configure with the SRv6 pipeconf.
         SharedScheduledExecutors.newTimeout(
                 this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
-        deviceService.getAvailableDevices().forEach(device -> setUpDevice(device.id()));
         log.info("Started");
     }
 
@@ -339,25 +338,23 @@ public class L2BridgingApp {
         @Override
         public void event(DeviceEvent event) {
             final DeviceId deviceId = event.subject().id();
-
-            switch (event.type()) {
-                case DEVICE_ADDED:
-                case DEVICE_AVAILABILITY_CHANGED:
-                    if (deviceService.isAvailable(deviceId)) {
-                        setUpDevice(deviceId);
-                    }
-                    break;
-                case DEVICE_REMOVED:
-                    cleanUpDevice(deviceId);
-                    break;
-                default:
-                    // Ignore other types of events.
+            log.info("{} event! deviceId={}", event.type(), deviceId);
+            if (deviceService.isAvailable(deviceId)) {
+                setUpDevice(deviceId);
             }
         }
 
         @Override
         public boolean isRelevant(DeviceEvent event) {
-            // Process device event only if this controller instance is the master.
+            switch (event.type()) {
+                case DEVICE_ADDED:
+                case DEVICE_AVAILABILITY_CHANGED:
+                    break;
+                default:
+                    // Ignore other events.
+                    return false;
+            }
+            // Process only if this controller instance is the master.
             final DeviceId deviceId = event.subject().id();
             return mastershipService.isLocalMaster(deviceId);
         }
@@ -369,35 +366,39 @@ public class L2BridgingApp {
     public class InternalHostListener implements HostListener {
 
         @Override
-        public boolean isRelevant(HostEvent event) {
-            // Process host event only if this controller instance is the master
-            // for the device where this host is attached to.
-            final Host host = event.subject();
-            final DeviceId deviceId = host.location().deviceId();
-            return mastershipService.isLocalMaster(deviceId);
-        }
-
-        @Override
         public void event(HostEvent event) {
             final Host host = event.subject();
             // Device and port where the host is located.
             final DeviceId deviceId = host.location().deviceId();
             final PortNumber port = host.location().port();
 
+            log.info("{} event! host={}, deviceId={}, port={}",
+                     event.type(), host.id(), deviceId, port);
+
+            if (event.type() == HostEvent.Type.HOST_ADDED) {
+                learnHost(host, deviceId, port);
+            }
+        }
+
+        @Override
+        public boolean isRelevant(HostEvent event) {
             switch (event.type()) {
                 case HOST_ADDED:
-                    //  If host moved we overwrite the previous table entry.
-                    learnHost(host, deviceId, port);
                     break;
-                case HOST_MOVED:
                 case HOST_REMOVED:
-                    // Food for thoughts:
-                    // how to support host moved and removed events?
-                    log.warn("{} event not supported yet", event.type());
-                    break;
+                case HOST_UPDATED:
+                case HOST_MOVED:
                 default:
-                    // Ignore other types of events.
+                    // Ignore other events.
+                    // Food for thoughts:
+                    // how to support host moved/removed events?
+                    return false;
             }
+            // Process host event only if this controller instance is the master
+            // for the device where this host is attached to.
+            final Host host = event.subject();
+            final DeviceId deviceId = host.location().deviceId();
+            return mastershipService.isLocalMaster(deviceId);
         }
     }
 }

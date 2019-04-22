@@ -38,6 +38,14 @@
         <onos.app.readme>
             Provides SRv6 capabilities to a leaf-spine network of P4 switches
         </onos.app.readme>
+        <onos.app.requires>
+            org.onosproject.drivers.bmv2,
+            org.onosproject.lldpprovider,
+            org.onosproject.hostprovider,
+            org.onosproject.gui
+        </onos.app.requires>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
     <dependencies>

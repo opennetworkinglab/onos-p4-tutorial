@@ -1,5 +1,6 @@
 package org.p4.p4d2.tutorial;
 
+import org.onosproject.cfg.ComponentConfigService;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.config.ConfigFactory;
 import org.onosproject.net.config.NetworkConfigRegistry;
@@ -14,15 +15,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A component which register the Srv6DeviceConfig config.
+ * A component which among other things registers the Srv6DeviceConfig to the
+ * netcfg subsystem.
  */
 @Component(immediate = true)
-public class Srv6DeviceConfigManager {
+public class MainComponent {
     private static final Logger log =
-            LoggerFactory.getLogger(Srv6DeviceConfigManager.class.getName());
+            LoggerFactory.getLogger(MainComponent.class.getName());
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected NetworkConfigRegistry registry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private ComponentConfigService compCfgService;
 
     private ConfigFactory<DeviceId, Srv6DeviceConfig> srv6ConfigFactory =
             new ConfigFactory<DeviceId, Srv6DeviceConfig>(
@@ -35,6 +40,13 @@ public class Srv6DeviceConfigManager {
 
     @Activate
     protected void activate() {
+        compCfgService.preSetProperty("org.onosproject.net.flow.impl.FlowRuleManager",
+                                      "fallbackFlowPollFrequency", "4", false);
+        compCfgService.preSetProperty("org.onosproject.net.group.impl.GroupManager",
+                                      "fallbackGroupPollFrequency", "3", false);
+        compCfgService.preSetProperty("org.onosproject.provider.host.impl.HostLocationProvider",
+                                      "requestIpv6ND", "true", false);
+
         registry.registerConfigFactory(srv6ConfigFactory);
         log.info("Started");
     }

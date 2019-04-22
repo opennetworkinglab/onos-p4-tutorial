@@ -81,9 +81,9 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  * Application which handles IPv6 routing.
  */
 @Component(immediate = true)
-public class Ipv6Routing {
+public class Ipv6RoutingComponent {
 
-    private static final Logger log = LoggerFactory.getLogger(Ipv6Routing.class);
+    private static final Logger log = LoggerFactory.getLogger(Ipv6RoutingComponent.class);
 
     private static final String APP_NAME = AppConstants.APP_PREFIX + ".ipv6routing";
 
@@ -311,7 +311,7 @@ public class Ipv6Routing {
             return;
         } else {
             log.info("Setting up routes on {} for host {} [{}]",
-                     deviceId, host, hostIpv6Addresses);
+                     deviceId, host.id(), hostIpv6Addresses);
         }
 
         // Create a group with only one member.
@@ -586,51 +586,74 @@ public class Ipv6Routing {
         public void event(HostEvent event) {
             Host host = event.subject();
             DeviceId deviceId = host.location().deviceId();
-            switch (event.type()) {
-                case HOST_ADDED:
-                case HOST_UPDATED:
-                    setUpHostRules(deviceId, host);
-                    break;
-                default:
-                    // Ignore other events.
+            log.info("{} event! host={}, deviceId={}, port={}",
+                     event.type(), host.id(), deviceId, host.location().port());
+            if (event.type() == HostEvent.Type.HOST_ADDED) {
+                setUpHostRules(deviceId, host);
             }
         }
 
         @Override
         public boolean isRelevant(HostEvent event) {
-            // Consider only events where this ONOS instance is master for
-            // the device where the host is attached to.
-            Host host = event.subject();
-            return mastershipService.isLocalMaster(host.location().deviceId());
+            switch (event.type()) {
+                case HOST_ADDED:
+                    break;
+                case HOST_REMOVED:
+                case HOST_UPDATED:
+                case HOST_MOVED:
+                default:
+                    // Ignore other events.
+                    // Food for thoughts:
+                    // how to support host moved/removed events?
+                    return false;
+            }
+            // Process host event only if this controller instance is the master
+            // for the device where this host is attached.
+            final Host host = event.subject();
+            final DeviceId deviceId = host.location().deviceId();
+            return mastershipService.isLocalMaster(deviceId);
         }
     }
 
     /**
      * Listener of link events.
-     * FIXME: Do we need to rely on device events as well?
      */
+    // FIXME: Do we need to rely on device events as well?
     class InternalLinkListener implements LinkListener {
 
         @Override
         public void event(LinkEvent event) {
+            DeviceId srcDev = event.subject().src().deviceId();
+            DeviceId dstDev = event.subject().dst().deviceId();
+            log.info("{} event! src={}, dst={}", event.type(), srcDev, dstDev);
+            if (event.type() == LinkEvent.Type.LINK_ADDED) {
+                if (mastershipService.isLocalMaster(srcDev)) {
+                    setUpMyStationTable(srcDev);
+                    setUpRoute(srcDev);
+                    setUpNextHopRules(srcDev);
+                }
+                if (mastershipService.isLocalMaster(dstDev)) {
+                    setUpMyStationTable(dstDev);
+                    setUpRoute(dstDev);
+                    setUpNextHopRules(dstDev);
+                }
+            }
+        }
+
+        @Override
+        public boolean isRelevant(LinkEvent event) {
             switch (event.type()) {
                 case LINK_ADDED:
-                    DeviceId srcDev = event.subject().src().deviceId();
-                    DeviceId dstDev = event.subject().dst().deviceId();
-                    if (mastershipService.isLocalMaster(srcDev)) {
-                        setUpMyStationTable(srcDev);
-                        setUpRoute(srcDev);
-                        setUpNextHopRules(srcDev);
-                    }
-                    if (mastershipService.isLocalMaster(dstDev)) {
-                        setUpMyStationTable(dstDev);
-                        setUpRoute(dstDev);
-                        setUpNextHopRules(dstDev);
-                    }
                     break;
+                case LINK_UPDATED:
+                case LINK_REMOVED:
                 default:
-                    // Ignore other events.
+                    return false;
             }
+            DeviceId srcDev = event.subject().src().deviceId();
+            DeviceId dstDev = event.subject().dst().deviceId();
+            return mastershipService.isLocalMaster(srcDev) ||
+                    mastershipService.isLocalMaster(dstDev);
         }
     }
 }
