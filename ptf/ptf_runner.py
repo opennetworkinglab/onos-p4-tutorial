@@ -56,7 +56,7 @@ def check_ifaces(ifaces):
     Checks that required interfaces exist.
     """
     ifconfig_out = subprocess.check_output(['ifconfig'])
-    iface_list = re.findall(r'^(\S+)', ifconfig_out, re.S | re.M)
+    iface_list = re.findall(r'^([a-zA-Z0-9]+)', ifconfig_out, re.S | re.M)
     present_ifaces = set(iface_list)
     ifaces = set(ifaces)
     return ifaces <= present_ifaces
