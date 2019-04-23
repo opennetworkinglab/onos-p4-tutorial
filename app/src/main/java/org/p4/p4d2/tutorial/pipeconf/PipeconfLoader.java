@@ -59,7 +59,7 @@ public final class PipeconfLoader {
         if (pipeconfService.getPipeconf(PIPECONF_ID).isPresent()) {
             // Remove first if already registered, to support reloading of the
             // pipeconf during the tutorial.
-            pipeconfService.remove(PIPECONF_ID);
+            pipeconfService.unregister(PIPECONF_ID);
         }
         try {
             pipeconfService.register(buildPipeconf());
