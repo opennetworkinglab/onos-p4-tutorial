@@ -55,7 +55,6 @@ import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
 import org.onosproject.net.pi.runtime.PiActionProfileGroupId;
 import org.onosproject.net.pi.runtime.PiTableAction;
-import org.onosproject.store.service.StorageService;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -104,9 +103,6 @@ public class Ipv6RoutingComponent {
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private GroupService groupService;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private StorageService storageService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private DeviceService deviceService;

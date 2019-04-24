@@ -17,10 +17,10 @@ app-reload: app
 	cd app && make load
 
 reset:
-	cd ~ && ./kill_onos.sh
-	cd p4src && make clean
-	cd app && make clean
-	cd mininet && make clean
+	-cd ~ && ./kill_onos.sh
+	-cd p4src && make clean
+	-cd app && make clean
+	-cd mininet && make clean
 
 onos-run:
 	cd ~ && ./start_onos.sh
