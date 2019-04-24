@@ -302,15 +302,22 @@ class P4RuntimeTest(BaseTest):
         else:
             return msg.packet
 
-    def verify_packet_in(self, exp_pkt, exp_in_port, timeout=2):
+    def verify_packet_in(self, exp_pkt, exp_in_port, inport_meta_id,
+                         timeout=2):
         pkt_in_msg = self.get_packet_in(timeout=timeout)
         in_port_ = stringify(exp_in_port, 2)
-        rx_in_port_ = pkt_in_msg.metadata[0].value
+        rx_in_port_ = None
+        for meta in pkt_in_msg.metadata:
+            if meta.metadata_id == inport_meta_id:
+                rx_in_port_ = meta.value
+                break
+        if rx_in_port_ is None:
+            self.fail("No such metadata with ID %d in PacketIn message: %s"
+                      % (inport_meta_id, pkt_in_msg))
         if in_port_ != rx_in_port_:
-            rx_inport = struct.unpack("!h", rx_in_port_)[0]
-            self.fail(
-                "Wrong packet-in ingress port, expected {} but received was {}"
-                    .format(exp_in_port, rx_inport))
+            rx_inport = struct.unpack("!h", rx_in_port_)[inport_meta_idx]
+            self.fail("Wrong PacketIn ingress port, expected {} but received was {}"
+                .format(inport_meta_idx, exp_in_port, rx_inport))
         rx_pkt = Ether(pkt_in_msg.payload)
         if not match_exp_pkt(exp_pkt, rx_pkt):
             self.fail(

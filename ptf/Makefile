@@ -14,3 +14,6 @@ endif
 p4src:
 	$(info ************ COMPILING P4 PROGRAM ************)
 	cd ${P4C_SRC_DIR} && make build
+
+%:
+	make test TEST=$@

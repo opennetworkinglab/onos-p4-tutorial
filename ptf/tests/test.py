@@ -26,6 +26,34 @@ from scapy.utils6 import in6_getnsma, in6_getnsmac
 from base_test import P4RuntimeTest, stringify, mac_to_binary, ipv6_to_binary, \
     autocleanup
 
+# ------------------------------------------------------------------------------
+# P4INFO CONSTANTS
+#
+# Modify to match the content of your P4Info file.
+# ------------------------------------------------------------------------------
+
+# Actions
+HDR_ETH_DST = "hdr.ethernet.dst_addr"
+ACTION_CLONE_TO_CPU = "FabricIngress.clone_to_cpu"
+
+# Tables
+TABLE_ACL = "FabricIngress.acl"
+
+# Match fields
+HDR_ICMP_TYPE = "fabric_metadata.icmp_type"
+HDR_IP_PROTO = "fabric_metadata.ip_proto"
+HDR_ETHER_TYPE = "hdr.ethernet.ether_type"
+
+# Controller packet-in/out metadata
+PACKET_IN_INGRESS_PORT_META_ID = 1
+PACKET_OUT_EGRESS_PORT_META_ID = 1
+
+CPU_CLONE_SESSION_ID = 99
+
+# ------------------------------------------------------------------------------
+# TEST CONSTANTS
+# ------------------------------------------------------------------------------
+
 DEFAULT_PRIORITY = 10
 
 IPV6_MCAST_MAC_1 = "33:33:00:00:00:01"
@@ -53,8 +81,6 @@ IPV6_ETH_TYPE = 0x86DD
 ICMPV6_IP_PROTO = 58
 NS_ICMPV6_TYPE = 135
 NA_ICMPV6_TYPE = 136
-
-CPU_CLONE_SESSION_ID = 99
 
 
 def pkt_mac_swap(pkt):
@@ -95,6 +121,13 @@ def genNdpNaPkt(src_mac, dst_mac, src_ip, dst_ip):
     p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
     return p
 
+# ------------------------------------------------------------------------------
+# BASE TEST CLASS
+#
+# Provides methods to insert table entries and other P4 program-specific
+# P4Runtime entities.
+# ------------------------------------------------------------------------------
+
 
 class FabricTest(P4RuntimeTest):
 
@@ -119,10 +152,38 @@ class FabricTest(P4RuntimeTest):
         self.next_grp_id = self.next_grp_id + 1
         return grp_id
 
+    def add_acl_clone_to_cpu_entry(self, eth_type=None, ip_proto=None,
+                                   icmp_type=None):
+        """
+        Adds a table entry for the ACL table to clone packets to the CPU.
+        :param eth_type: Ether type
+        :param ip_proto: IPv4/6 next protocol type
+        :param icmp_type: ICMP type
+        """
+        match_key = []
+        if eth_type:
+            eth_type_ = stringify(eth_type, 2)
+            eth_type_mask = stringify(0xFFFF, 2)
+            match_key.append(self.Ternary(
+                HDR_ETHER_TYPE, eth_type_, eth_type_mask))
+        if ip_proto:
+            ip_proto_ = stringify(ip_proto, 1)
+            ip_proto_mask = stringify(0xFF, 1)
+            match_key.append(self.Ternary(
+                HDR_IP_PROTO, ip_proto_, ip_proto_mask))
+        if icmp_type:
+            icmp_type_ = stringify(icmp_type, 1)
+            icmp_type_mask = stringify(0xFF, 1)
+            match_key.append(self.Ternary(
+                HDR_ICMP_TYPE, icmp_type_, icmp_type_mask))
+
+        self.send_request_add_entry_to_action(
+            TABLE_ACL, match_key, ACTION_CLONE_TO_CPU, [], DEFAULT_PRIORITY)
+
     def add_l2_exact_entry(self, eth_dst, out_port):
         out_port_ = stringify(out_port, 2)
         eth_dst_ = mac_to_binary(eth_dst)
-        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dst_)]
+        mk = [self.Exact(HDR_ETH_DST, eth_dst_)]
         self.send_request_add_entry_to_action(
             "FabricIngress.l2_exact_table", mk,
             "FabricIngress.set_output_port", [("port_num", out_port_)])
@@ -131,7 +192,7 @@ class FabricTest(P4RuntimeTest):
         mc_group_id_ = stringify(mcast_group_id, 2)
         eth_dst_ = mac_to_binary(eth_dst)
         eth_dst_mask_ = mac_to_binary(eth_dst_mask)
-        mk = [self.Ternary("hdr.ethernet.dst_addr", eth_dst_, eth_dst_mask_)]
+        mk = [self.Ternary(HDR_ETH_DST, eth_dst_, eth_dst_mask_)]
         self.send_request_add_entry_to_action(
             "FabricIngress.l2_ternary_table", mk,
             "FabricIngress.set_multicast_group", [("gid", mc_group_id_)],
@@ -139,7 +200,7 @@ class FabricTest(P4RuntimeTest):
 
     def add_l2_my_station_entry(self, eth_dst):
         eth_dst_ = mac_to_binary(eth_dst)
-        mk = [self.Exact("hdr.ethernet.dst_addr", eth_dst_)]
+        mk = [self.Exact(HDR_ETH_DST, eth_dst_)]
         self.send_request_add_entry_to_action(
             "FabricIngress.l2_my_station", mk, "NoAction", [])
 
@@ -169,30 +230,6 @@ class FabricTest(P4RuntimeTest):
         grp_id = self.get_next_grp_id()
         self.add_l3_group_with_members(grp_id, members)
         self.add_l3_entry(dstAddr, prefix_len, grp_id)
-
-    def add_acl_cpu_entry(self, eth_type=None, ip_proto=None, icmp_type=None,
-                          clone=False):
-        match_key = []
-        if eth_type:
-            eth_type_ = stringify(eth_type, 2)
-            eth_type_mask = stringify(0xFFFF, 2)
-            match_key.append(self.Ternary(
-                "hdr.ethernet.ether_type", eth_type_, eth_type_mask))
-        if ip_proto:
-            ip_proto_ = stringify(ip_proto, 1)
-            ip_proto_mask = stringify(0xFF, 1)
-            match_key.append(self.Ternary(
-                "fabric_metadata.ip_proto", ip_proto_, ip_proto_mask))
-        if icmp_type:
-            icmp_type_ = stringify(icmp_type, 1)
-            icmp_type_mask = stringify(0xFF, 1)
-            match_key.append(self.Ternary(
-                "fabric_metadata.icmp_type", icmp_type_, icmp_type_mask))
-        action_name = "clone_to_cpu" if clone else "punt_to_cpu"
-        self.send_request_add_entry_to_action(
-            "FabricIngress.acl", match_key,
-            "FabricIngress." + action_name, [],
-            DEFAULT_PRIORITY)
 
     def add_mcast_group(self, group_id, ports):
         req = self.get_new_write_request()
@@ -260,14 +297,177 @@ class FabricTest(P4RuntimeTest):
         )
 
 
-class FabricBridgingTest(FabricTest):
+# ------------------------------------------------------------------------------
+# CONTROLLER PACKET-IN/OUT TESTS
+#
+# To run these tests:
+#     make packetio
+# ------------------------------------------------------------------------------
+
+
+@group("packetio")
+class PacketOutTest(FabricTest):
+    """Tests PacketOut capability."""
+
+    def runPacketOutTest(self, pkt):
+        for port in [self.port1, self.port2]:
+            # Forge PacketOut message.
+            packet_out = p4runtime_pb2.PacketOut()
+            packet_out.payload = str(pkt)
+            egress_physical_port = packet_out.metadata.add()
+            # Set egress port metadata.
+            egress_physical_port.metadata_id = PACKET_OUT_EGRESS_PORT_META_ID
+            # 9 bits hence 2 bytes for port numbers.
+            egress_physical_port.value = stringify(port, 2)
+            # Send message and expect packet on the given data plane port.
+            self.send_packet_out(packet_out)
+            testutils.verify_packet(self, pkt, port)
+        # Make sure packet was forwarded only on the specified ports
+        testutils.verify_no_other_packets(self)
+
+    def runTest(self):
+        print ""
+        for type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
+            print "Testing %s packet..." % type
+            pkt = getattr(testutils, "simple_%s_packet" % type)()
+            self.runPacketOutTest(pkt)
+
+
+@group("packetio")
+class PacketInTest(FabricTest):
+    """Tests PacketIn capability my matching on the packet EtherType"""
+
+    @autocleanup
+    def runPacketInTest(self, pkt):
+        eth_type = pkt[Ether].type
+        # Match on the given pkt's EtherType.
+        self.add_acl_clone_to_cpu_entry(eth_type=eth_type)
+        self.add_clone_session(session_id=CPU_CLONE_SESSION_ID,
+                               ports=[self.cpu_port])
+
+        for inport in [self.port1, self.port2, self.port3]:
+            # Send packet and expect PacketIn message, with the given ingress
+            # port as part of PacketIn metadata fields.
+            testutils.send_packet(self, inport, str(pkt))
+            self.verify_packet_in(
+                exp_pkt=pkt, exp_in_port=inport,
+                inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+
+    def runTest(self):
+        print ""
+        for type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
+            print "Testing %s packet..." % type
+            pkt = getattr(testutils, "simple_%s_packet" % type)()
+            self.runPacketInTest(pkt)
+
+# ------------------------------------------------------------------------------
+# BRIDGING TESTS
+#
+# To run these tests:
+#     make bridging
+# ------------------------------------------------------------------------------
+
+
+@group("bridging")
+class FabricArpNdpRequestWithCloneTest(FabricTest):
+    """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation as
+    well as cloning to CPU (controller) for host discovery
+    """
+
+    @autocleanup
+    def test(self, pkt):
+        mcast_group_id = 10
+        mcast_ports = [self.port1, self.port2, self.port3]
+
+        # Add multicast group.
+        self.add_mcast_group(group_id=mcast_group_id, ports=mcast_ports)
+        # Match eth dst: FF:FF:FF:FF:FF:FF (MAC broadcast for ARP requests)
+        self.add_l2_ternary_entry(
+            eth_dst="FF:FF:FF:FF:FF:FF",
+            eth_dst_mask="FF:FF:FF:FF:FF:FF",
+            mcast_group_id=mcast_group_id)
+        # Match eth dst: 33:33:**:**:**:** (IPv6 multicast for NDP requests)
+        self.add_l2_ternary_entry(
+            eth_dst="33:33:00:00:00:00",
+            eth_dst_mask="FF:FF:00:00:00:00",
+            mcast_group_id=mcast_group_id)
+
+        # Clone ARPs
+        self.add_acl_clone_to_cpu_entry(eth_type=ARP_ETH_TYPE)
+        # Clone NDP Neighbor Solicitation
+        self.add_acl_clone_to_cpu_entry(
+            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
+            icmp_type=NS_ICMPV6_TYPE)
+        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
+
+        for inport in mcast_ports:
+            testutils.send_packet(self, inport, str(pkt))
+            # Pkt should be received on CPU...
+            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport,
+                                  inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+            # ...and on all ports except the ingress one.
+            verify_ports = set(mcast_ports)
+            verify_ports.discard(inport)
+            for port in verify_ports:
+                testutils.verify_packet(self, pkt, port)
+        testutils.verify_no_other_packets(self)
+
+    @autocleanup
+    def runTest(self):
+        print ""
+        print "Testing ARP request packet..."
+        arp_pkt = testutils.simple_arp_packet()
+        self.test(arp_pkt)
+
+        print "Testing NDP NS packet..."
+        ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
+                              target_ip=HOST2_IPV6)
+        self.test(ndp_pkt)
+
+
+@group("bridging")
+class FabricArpNdpReplyWithCloneTest(FabricTest):
+    """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
+    requesting host.
+    """
+
+    @autocleanup
+    def test(self, pkt):
+        self.add_l2_exact_entry(pkt[Ether].dst, self.port1)
+        self.add_acl_clone_to_cpu_entry(eth_type=ARP_ETH_TYPE)
+        self.add_acl_clone_to_cpu_entry(
+            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
+            icmp_type=NA_ICMPV6_TYPE)
+        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
+
+        testutils.send_packet(self, self.port2, str(pkt))
+
+        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port2,
+                              inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+        testutils.verify_packet(self, pkt, self.port1)
+
+    def runTest(self):
+        print ""
+        print "Testing ARP reply packet..."
+        # op=1 request, op=2 relpy
+        arp_pkt = testutils.simple_arp_packet(
+            eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
+        self.test(arp_pkt)
+
+        print "Testing NDP NA packet..."
+        ndp_pkt = genNdpNaPkt(src_mac=HOST1_MAC, dst_mac=HOST2_MAC,
+                              src_ip=HOST1_IPV6, dst_ip=HOST2_IPV6)
+        self.test(ndp_pkt)
+
+
+@group("bridging")
+class BridgingTest(FabricTest):
     """Tests basic L2 forwarding"""
 
     @autocleanup
     def runBridgingTest(self, pkt):
         mac_src = pkt[Ether].src
         mac_dst = pkt[Ether].dst
-        # miss on filtering.fwd_classifier => bridging
         self.add_l2_exact_entry(mac_dst, self.port2)
         self.add_l2_exact_entry(mac_src, self.port1)
         pkt2 = pkt_mac_swap(pkt.copy())
@@ -284,7 +484,15 @@ class FabricBridgingTest(FabricTest):
                 pktlen=120)
             self.runBridgingTest(pkt)
 
+# ------------------------------------------------------------------------------
+# IPV6 ROUTING TESTS
+#
+# To run these tests:
+#     make routing
+# ------------------------------------------------------------------------------
 
+
+@group("routing")
 class FabricNdpReplyGenTest(FabricTest):
     """Tests automatic generation of NDP Neighbor Advertisement for IPV6 address
     associated to the switch interface."""
@@ -300,7 +508,7 @@ class FabricNdpReplyGenTest(FabricTest):
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, exp_pkt, self.port1)
 
-
+@group("bridging")
 class FabricIPv6RoutingTest(FabricTest):
     """Tests basic IPv6 routing"""
 
@@ -329,6 +537,13 @@ class FabricIPv6RoutingTest(FabricTest):
                 ipv6_src=HOST1_IPV6, ipv6_dst=HOST2_IPV6
             )
             self.doRunTest(pkt, HOST2_MAC)
+
+# ------------------------------------------------------------------------------
+# SRV6 TESTS
+#
+# To run these tests:
+#     make srv6
+# ------------------------------------------------------------------------------
 
 
 @group("srv6")
@@ -491,132 +706,3 @@ class FabricSrv6EndPspTest(FabricTest):
         pkt /= TCP()
 
         self.doRunTest(pkt)
-
-
-@group("packetio")
-class FabricPacketOutTest(FabricTest):
-
-    def runPacketOutTest(self, pkt):
-        for port in [self.port1, self.port2]:
-            port_hex = stringify(port, 2)
-            packet_out = p4runtime_pb2.PacketOut()
-            packet_out.payload = str(pkt)
-            egress_physical_port = packet_out.metadata.add()
-            egress_physical_port.metadata_id = 1
-            egress_physical_port.value = port_hex
-
-            self.send_packet_out(packet_out)
-            testutils.verify_packet(self, pkt, port)
-        testutils.verify_no_other_packets(self)
-
-    @autocleanup
-    def runTest(self):
-        print ""
-        for pkt_type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6",
-                         "icmpv6"]:
-            print "Testing %s packet..." % pkt_type
-            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
-            self.runPacketOutTest(pkt)
-
-
-@group("packetio")
-class FabricPacketInTest(FabricTest):
-
-    @autocleanup
-    def runPacketInTest(self, pkt, eth_type=None):
-        if eth_type is None:
-            eth_type = pkt[Ether].type
-        self.add_acl_cpu_entry(eth_type=eth_type)
-        for port in [self.port1, self.port2, self.port3]:
-            testutils.send_packet(self, port, str(pkt))
-            self.verify_packet_in(pkt, port)
-        testutils.verify_no_other_packets(self)
-
-    def runTest(self):
-        print ""
-        for pkt_type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6",
-                         "icmpv6"]:
-            print "Testing %s packet..." % pkt_type
-            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
-            self.runPacketInTest(pkt)
-
-
-class FabricArpNdpRequestWithCloneTest(FabricTest):
-    """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation as
-    well as cloning to CPU (controller) for host discovery
-    """
-
-    @autocleanup
-    def test(self, pkt):
-        mcast_group_id = 10
-        mcast_ports = [self.port1, self.port2, self.port3]
-
-        self.add_mcast_group(group_id=mcast_group_id, ports=mcast_ports)
-        self.add_l2_ternary_entry(
-            eth_dst=MAC_BROADCAST, eth_dst_mask=MAC_FULL_MASK,
-            mcast_group_id=mcast_group_id)
-        self.add_l2_ternary_entry(
-            eth_dst=MAC_MULTICAST, eth_dst_mask=MAC_MULTICAST_MASK,
-            mcast_group_id=mcast_group_id)
-
-        self.add_acl_cpu_entry(eth_type=ARP_ETH_TYPE, clone=True)
-        self.add_acl_cpu_entry(
-            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
-            icmp_type=NS_ICMPV6_TYPE, clone=True)
-        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
-
-        for inport in mcast_ports:
-            testutils.send_packet(self, inport, str(pkt))
-            # Pkt should be received on CPU and on all ports
-            # except the ingress one.
-            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
-            verify_ports = set(mcast_ports)
-            verify_ports.discard(inport)
-            for port in verify_ports:
-                testutils.verify_packet(self, pkt, port)
-        testutils.verify_no_other_packets(self)
-
-    @autocleanup
-    def runTest(self):
-        print ""
-        print "Testing ARP request packet..."
-        arp_pkt = testutils.simple_arp_packet()
-        self.test(arp_pkt)
-
-        print "Testing NDP NS packet..."
-        ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
-                              target_ip=HOST2_IPV6)
-        self.test(ndp_pkt)
-
-
-class FabricArpNdpReplyWithCloneTest(FabricTest):
-    """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
-    requesting host.
-    """
-
-    @autocleanup
-    def test(self, pkt):
-        self.add_l2_exact_entry(pkt[Ether].dst, self.port1)
-        self.add_acl_cpu_entry(eth_type=ARP_ETH_TYPE, clone=True)
-        self.add_acl_cpu_entry(
-            eth_type=IPV6_ETH_TYPE, ip_proto=ICMPV6_IP_PROTO,
-            icmp_type=NA_ICMPV6_TYPE, clone=True)
-        self.add_clone_session(CPU_CLONE_SESSION_ID, [self.cpu_port])
-
-        testutils.send_packet(self, self.port2, str(pkt))
-
-        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port2)
-        testutils.verify_packet(self, pkt, self.port1)
-
-    def runTest(self):
-        print ""
-        print "Testing ARP reply packet..."
-        # op=1 request, op=2 relpy
-        arp_pkt = testutils.simple_arp_packet(
-            eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
-        self.test(arp_pkt)
-
-        print "Testing NDP NA packet..."
-        ndp_pkt = genNdpNaPkt(src_mac=HOST1_MAC, dst_mac=HOST2_MAC,
-                              src_ip=HOST1_IPV6, dst_ip=HOST2_IPV6)
-        self.test(ndp_pkt)
