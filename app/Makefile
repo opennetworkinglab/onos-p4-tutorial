@@ -1,7 +1,7 @@
 build:
 	mvn clean install
 
-load: build
+load:
 	onos-app ${OCI} reinstall! target/srv6-tutorial-1.0-SNAPSHOT.oar
 
 clean:
