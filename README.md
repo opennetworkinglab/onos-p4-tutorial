@@ -36,12 +36,12 @@ Use the following credentials to log in the Ubuntu system:
 To work on the exercises you will need to clone this repo inside the VM:
 
     cd ~
-    git clone <TODO add repo link> srv6-tutorial
+    git clone https://github.com/opennetworkinglab/onos-p4-tutorial tutorial
 
-If the `srv6-tutorial` directory is already present, make sure to update its 
+If the `tutorial` directory is already present, make sure to update its 
 content:
 
-    cd ~/srv6-tutorial
+    cd ~/tutorial
     git pull origin master
 
 ## Using an IDE to work on the exercises
