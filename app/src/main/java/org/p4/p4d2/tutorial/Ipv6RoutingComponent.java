@@ -365,7 +365,16 @@ public class Ipv6RoutingComponent {
             }
             DeviceId leafId = device.id();
             MacAddress leafMac = getMyStationMac(leafId);
-            Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
+            final Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
+
+            //FIXME: This should be added in exercise 3
+            getDeviceConfig(leafId).ifPresent(config -> {
+                Ip6Address sid = config.mySid();
+                if (sid != null) {
+                    subnetsToRoute.add(Ip6Prefix.valueOf(sid, 128));
+                }
+            });
+            // ---- end exercise 3 addition
 
             if (subnetsToRoute.isEmpty()) {
                 // No subnets on this leaf switch. Next device.

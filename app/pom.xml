@@ -155,11 +155,11 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>4.0.0</version>
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Karaf-Commands>org.p4.p4d2.tutorial</Karaf-Commands>
+                        <Karaf-Commands>org.p4.p4d2.tutorial.cli</Karaf-Commands>
                     </instructions>
                 </configuration>
             </plugin>
