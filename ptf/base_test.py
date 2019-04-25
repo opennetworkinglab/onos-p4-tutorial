@@ -20,7 +20,6 @@
 #
 
 import Queue
-import struct
 import sys
 import threading
 import time
@@ -31,7 +30,6 @@ from unittest import SkipTest
 import google.protobuf.text_format
 import grpc
 import ptf
-import ptf.testutils as testutils
 import scapy.packet
 import scapy.utils
 from google.rpc import status_pb2, code_pb2
@@ -39,10 +37,47 @@ from ipaddress import ip_address
 from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
 from ptf import config
+from ptf import testutils as testutils
 from ptf.base_tests import BaseTest
 from ptf.dataplane import match_exp_pkt
+from ptf.packet import IPv6
+from scapy.layers.inet6 import *
+from scapy.layers.l2 import Ether
+from scapy.pton_ntop import inet_pton, inet_ntop
+from scapy.utils6 import in6_getnsma, in6_getnsmac
+
 from p4runtime_lib.helper import P4InfoHelper
 
+DEFAULT_PRIORITY = 10
+
+IPV6_MCAST_MAC_1 = "33:33:00:00:00:01"
+
+SWITCH1_MAC = "00:00:00:00:aa:01"
+SWITCH2_MAC = "00:00:00:00:aa:02"
+SWITCH3_MAC = "00:00:00:00:aa:03"
+HOST1_MAC = "00:00:00:00:00:01"
+HOST2_MAC = "00:00:00:00:00:02"
+
+MAC_BROADCAST = "FF:FF:FF:FF:FF:FF"
+MAC_FULL_MASK = "FF:FF:FF:FF:FF:FF"
+MAC_MULTICAST = "33:33:00:00:00:00"
+MAC_MULTICAST_MASK = "FF:FF:00:00:00:00"
+
+SWITCH1_IPV6 = "2001:0:1::1"
+SWITCH2_IPV6 = "2001:0:2::1"
+SWITCH3_IPV6 = "2001:0:3::1"
+HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
+HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
+
+ARP_ETH_TYPE = 0x0806
+IPV6_ETH_TYPE = 0x86DD
+
+ICMPV6_IP_PROTO = 58
+NS_ICMPV6_TYPE = 135
+NA_ICMPV6_TYPE = 136
+
+# FIXME: this should be removed, use generic packet in test
+PACKET_IN_INGRESS_PORT_META_ID = 1
 
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
@@ -104,6 +139,44 @@ def format_pkt_match(received_pkt, expected_pkt):
         sys.stdout.close()
         sys.stdout = stdout_save  # Restore the original stdout.
 
+
+def pkt_mac_swap(pkt):
+    orig_dst = pkt[Ether].dst
+    pkt[Ether].dst = pkt[Ether].src
+    pkt[Ether].src = orig_dst
+    return pkt
+
+
+def pkt_route(pkt, mac_dst):
+    pkt[Ether].src = pkt[Ether].dst
+    pkt[Ether].dst = mac_dst
+    return pkt
+
+
+def pkt_decrement_ttl(pkt):
+    if IP in pkt:
+        pkt[IP].ttl -= 1
+    elif IPv6 in pkt:
+        pkt[IPv6].hlim -= 1
+    return pkt
+
+
+def genNdpNsPkt(src_mac, src_ip, target_ip):
+    nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
+    d = inet_ntop(socket.AF_INET6, nsma)
+    dm = in6_getnsmac(nsma)
+    p = Ether(dst=dm) / IPv6(dst=d, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NS(tgt=target_ip)
+    p /= ICMPv6NDOptSrcLLAddr(lladdr=src_mac)
+    return p
+
+
+def genNdpNaPkt(src_mac, dst_mac, src_ip, dst_ip):
+    p = Ether(src=src_mac, dst=dst_mac)
+    p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NA(tgt=src_ip)
+    p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
+    return p
 
 # Used to indicate that the gRPC error Status object returned by the server has
 # an incorrect format.
@@ -198,6 +271,10 @@ class P4RuntimeTest(BaseTest):
         for device, port, ifname in config["interfaces"]:
             self._swports.append(port)
 
+        self.port1 = self.swports(1)
+        self.port2 = self.swports(2)
+        self.port3 = self.swports(3)
+
         grpc_addr = testutils.test_param_get("grpcaddr")
         if grpc_addr is None:
             grpc_addr = 'localhost:50051'
@@ -232,6 +309,19 @@ class P4RuntimeTest(BaseTest):
 
         self.election_id = 1
         self.set_up_stream()
+
+        self.next_mbr_id = 1
+        self.next_grp_id = 1
+
+    def get_next_mbr_id(self):
+        mbr_id = self.next_mbr_id
+        self.next_mbr_id = self.next_mbr_id + 1
+        return mbr_id
+
+    def get_next_grp_id(self):
+        grp_id = self.next_grp_id
+        self.next_grp_id = self.next_grp_id + 1
+        return grp_id
 
     def set_up_stream(self):
         self.stream_out_q = Queue.Queue()
