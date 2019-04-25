@@ -79,6 +79,12 @@ NA_ICMPV6_TYPE = 136
 # FIXME: this should be removed, use generic packet in test
 PACKET_IN_INGRESS_PORT_META_ID = 1
 
+
+def print_inline(text):
+    sys.stdout.write(text)
+    sys.stdout.flush()
+
+
 # See https://gist.github.com/carymrobbins/8940382
 # functools.partialmethod is introduced in Python 3.4
 class partialmethod(partial):
@@ -161,7 +167,7 @@ def pkt_decrement_ttl(pkt):
     return pkt
 
 
-def genNdpNsPkt(src_mac, src_ip, target_ip):
+def genNdpNsPkt(target_ip, src_mac=HOST1_MAC, src_ip=HOST1_IPV6):
     nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
     d = inet_ntop(socket.AF_INET6, nsma)
     dm = in6_getnsmac(nsma)
@@ -171,16 +177,21 @@ def genNdpNsPkt(src_mac, src_ip, target_ip):
     return p
 
 
-def genNdpNaPkt(src_mac, dst_mac, src_ip, dst_ip):
+def genNdpNaPkt(target_ip, target_mac,
+                src_mac=SWITCH1_MAC, dst_mac=IPV6_MCAST_MAC_1,
+                src_ip=SWITCH1_IPV6, dst_ip=HOST1_IPV6):
     p = Ether(src=src_mac, dst=dst_mac)
     p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
-    p /= ICMPv6ND_NA(tgt=src_ip)
-    p /= ICMPv6NDOptDstLLAddr(lladdr=src_mac)
+    p /= ICMPv6ND_NA(tgt=target_ip)
+    p /= ICMPv6NDOptDstLLAddr(lladdr=target_mac)
     return p
 
-# Used to indicate that the gRPC error Status object returned by the server has
-# an incorrect format.
+
 class P4RuntimeErrorFormatException(Exception):
+    """Used to indicate that the gRPC error Status object returned by the server has
+    an incorrect format.
+    """
+
     def __init__(self, message):
         super(P4RuntimeErrorFormatException, self).__init__(message)
 
@@ -310,19 +321,6 @@ class P4RuntimeTest(BaseTest):
         self.election_id = 1
         self.set_up_stream()
 
-        self.next_mbr_id = 1
-        self.next_grp_id = 1
-
-    def get_next_mbr_id(self):
-        mbr_id = self.next_mbr_id
-        self.next_mbr_id = self.next_mbr_id + 1
-        return mbr_id
-
-    def get_next_grp_id(self):
-        grp_id = self.next_grp_id
-        self.next_grp_id = self.next_grp_id + 1
-        return grp_id
-
     def set_up_stream(self):
         self.stream_out_q = Queue.Queue()
         self.stream_in_q = Queue.Queue()
@@ -435,11 +433,19 @@ class P4RuntimeTest(BaseTest):
         return rep
 
     def insert(self, entity):
+        if isinstance(entity, list) or isinstance(entity, tuple):
+            for e in entity:
+                self.insert(e)
+            return
         req = self.get_new_write_request()
         update = req.updates.add()
         update.type = p4runtime_pb2.Update.INSERT
         if isinstance(entity, p4runtime_pb2.TableEntry):
             msg_entity = update.entity.table_entry
+        elif isinstance(entity, p4runtime_pb2.ActionProfileGroup):
+            msg_entity = update.entity.action_profile_group
+        elif isinstance(entity, p4runtime_pb2.ActionProfileMember):
+            msg_entity = update.entity.action_profile_member
         else:
             self.fail("Entity %s not supported" % entity.__name__)
         msg_entity.CopyFrom(entity)

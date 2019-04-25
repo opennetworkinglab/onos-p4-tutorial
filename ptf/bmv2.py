@@ -145,7 +145,7 @@ class Bmv2Switch:
             cmdString = self.get_cmd(port_map)
             ld_path = ""
 
-        logger.info("Starting... %s" % cmdString)
+        logger.debug("Starting... %s" % cmdString)
 
         # Start the switch
         try:
@@ -177,7 +177,7 @@ class Bmv2Switch:
                 raise Exception("Switch did not start before timeout")
 
     def kill(self):
-        logger.info("Killing...")
+        logger.debug("Killing...")
         if self.bmv2popen is not None:
             self.bmv2popen.kill()
             self.bmv2popen = None

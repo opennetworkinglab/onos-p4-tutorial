@@ -52,9 +52,8 @@ class PacketOutTest(P4RuntimeTest):
         testutils.verify_no_other_packets(self)
 
     def runTest(self):
-        print ""
         for t in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
-            print "Testing %s packet..." % t
+            print_inline("%s ... " % t)
             pkt = getattr(testutils, "simple_%s_packet" % t)()
             self.runPacketOutTest(pkt)
 
@@ -92,8 +91,7 @@ class PacketInTest(P4RuntimeTest):
                 inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
 
     def runTest(self):
-        print ""
         for type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
-            print "Testing %s packet..." % type
+            print_inline("%s ... " % type)
             pkt = getattr(testutils, "simple_%s_packet" % type)()
             self.runPacketInTest(pkt)

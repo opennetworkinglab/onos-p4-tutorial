@@ -45,6 +45,19 @@ class P4InfoHelper(object):
             google.protobuf.text_format.Merge(p4info_f.read(), p4info)
         self.p4info = p4info
 
+        self.next_mbr_id = 1
+        self.next_grp_id = 1
+
+    def get_next_mbr_id(self):
+        mbr_id = self.next_mbr_id
+        self.next_mbr_id = self.next_mbr_id + 1
+        return mbr_id
+
+    def get_next_grp_id(self):
+        grp_id = self.next_grp_id
+        self.next_grp_id = self.next_grp_id + 1
+        return grp_id
+
     def get(self, entity_type, name=None, id=None):
         if name is not None and id is not None:
             raise AssertionError("name or id must be None")
@@ -188,6 +201,7 @@ class P4InfoHelper(object):
                           default_action=False,
                           action_name=None,
                           action_params=None,
+                          group_id=None,
                           priority=None):
         table_entry = p4runtime_pb2.TableEntry()
         table_entry.table_id = self.get_tables_id(table_name)
@@ -206,13 +220,52 @@ class P4InfoHelper(object):
 
         if action_name:
             action = table_entry.action.action
-            action.action_id = self.get_actions_id(action_name)
-            if action_params:
-                action.params.extend([
-                    self.get_action_param_pb(action_name, field_name, value)
-                    for field_name, value in action_params.iteritems()
-                ])
+            action.CopyFrom(self.build_action(action_name, action_params))
+
+        if group_id:
+            table_entry.action.action_profile_group_id = group_id
+
         return table_entry
+
+    def build_action(self, action_name, action_params=None):
+        action = p4runtime_pb2.Action()
+        action.action_id = self.get_actions_id(action_name)
+        if action_params:
+            action.params.extend([
+                self.get_action_param_pb(action_name, field_name, value)
+                for field_name, value in action_params.iteritems()
+            ])
+        return action
+
+    def build_act_prof_member(self, act_prof_name,
+                              action_name, action_params=None,
+                              member_id=None):
+        member = p4runtime_pb2.ActionProfileMember()
+        member.action_profile_id = self.get_action_profiles_id(act_prof_name)
+        member.member_id = member_id if member_id else self.get_next_mbr_id()
+        member.action.CopyFrom(self.build_action(action_name, action_params))
+        return member
+
+    def build_act_prof_group(self, act_prof_name, group_id, actions=()):
+        messages = []
+        group = p4runtime_pb2.ActionProfileGroup()
+        group.action_profile_id = self.get_action_profiles_id(act_prof_name)
+        group.group_id = group_id
+        for action in actions:
+            action_name = action[0]
+            if len(action) > 1:
+                action_params = action[1]
+            else:
+                action_params = None
+            member = self.build_act_prof_member(
+                act_prof_name, action_name, action_params)
+            messages.extend([member])
+            group_member = p4runtime_pb2.ActionProfileGroup.Member()
+            group_member.member_id = member.member_id
+            group_member.weight = 1
+            group.members.extend([group_member])
+        messages.append(group)
+        return messages
 
     def build_packet_out(self, payload, metadata=None):
         packet_out = p4runtime_pb2.PacketOut()

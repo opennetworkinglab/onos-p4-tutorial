@@ -36,7 +36,7 @@ PACKET_IN_INGRESS_PORT_META_ID = 1
 
 
 @group("bridging")
-class FabricArpNdpRequestWithCloneTest(P4RuntimeTest):
+class ArpNdpRequestWithCloneTest(P4RuntimeTest):
     """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation as
     well as cloning to CPU (controller) for host discovery
     """
@@ -126,19 +126,18 @@ class FabricArpNdpRequestWithCloneTest(P4RuntimeTest):
 
     @autocleanup
     def runTest(self):
-        print ""
-        print "Testing ARP request packet..."
+        print_inline("ARP request ... ")
         arp_pkt = testutils.simple_arp_packet()
         self.test(arp_pkt)
 
-        print "Testing NDP NS packet..."
+        print_inline("NDP NS ... ")
         ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
                               target_ip=HOST2_IPV6)
         self.test(ndp_pkt)
 
 
 @group("bridging")
-class FabricArpNdpReplyWithCloneTest(P4RuntimeTest):
+class ArpNdpReplyWithCloneTest(P4RuntimeTest):
     """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
     requesting host.
     """
@@ -193,16 +192,14 @@ class FabricArpNdpReplyWithCloneTest(P4RuntimeTest):
         testutils.verify_packet(self, pkt, self.port2)
 
     def runTest(self):
-        print ""
-        print "Testing ARP reply packet..."
+        print_inline("ARP reply ... ")
         # op=1 request, op=2 relpy
         arp_pkt = testutils.simple_arp_packet(
             eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
         self.test(arp_pkt)
 
-        print "Testing NDP NA packet..."
-        ndp_pkt = genNdpNaPkt(src_mac=HOST1_MAC, dst_mac=HOST2_MAC,
-                              src_ip=HOST1_IPV6, dst_ip=HOST2_IPV6)
+        print_inline("NDP NA ... ")
+        ndp_pkt = genNdpNaPkt(target_ip=HOST1_IPV6, target_mac=HOST1_MAC)
         self.test(ndp_pkt)
 
 
@@ -218,7 +215,7 @@ class BridgingTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
-                # Ternary match.
+                # Exact match.
                 "hdr.ethernet.dst_addr": mac_dst
             },
             action_name="FabricIngress.set_output_port",
@@ -230,7 +227,7 @@ class BridgingTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
-                # Ternary match.
+                # Exact match.
                 "hdr.ethernet.dst_addr": mac_src
             },
             action_name="FabricIngress.set_output_port",
@@ -249,9 +246,7 @@ class BridgingTest(P4RuntimeTest):
             self, [pkt, pkt2], [self.port2, self.port1])
 
     def runTest(self):
-        print ""
         for pkt_type in ["tcp", "udp", "icmp", "tcpv6", "udpv6", "icmpv6"]:
-            print "Testing %s packet..." % pkt_type
-            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
-                pktlen=120)
+            print_inline("%s ... " % pkt_type)
+            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(pktlen=120)
             self.runBridgingTest(pkt)
