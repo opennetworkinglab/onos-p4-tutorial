@@ -24,7 +24,7 @@ import org.onosproject.cli.net.DeviceIdCompleter;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.device.DeviceService;
-import org.p4.p4d2.tutorial.Srv6App;
+import org.p4.p4d2.tutorial.Srv6Component;
 
 /**
  * SRv6 Transit Clear Command
@@ -42,7 +42,7 @@ public class Srv6ClearCommand extends AbstractShellCommand {
     @Override
     protected void doExecute() {
         DeviceService deviceService = get(DeviceService.class);
-        Srv6App app = get(Srv6App.class);
+        Srv6Component app = get(Srv6Component.class);
 
         Device device = deviceService.getDevice(DeviceId.deviceId(uri));
         if (device == null) {

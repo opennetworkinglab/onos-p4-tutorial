@@ -26,7 +26,7 @@ import org.onosproject.cli.net.DeviceIdCompleter;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.device.DeviceService;
-import org.p4.p4d2.tutorial.Srv6App;
+import org.p4.p4d2.tutorial.Srv6Component;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -53,7 +53,7 @@ public class Srv6InsertCommand extends AbstractShellCommand {
     @Override
     protected void doExecute() {
         DeviceService deviceService = get(DeviceService.class);
-        Srv6App app = get(Srv6App.class);
+        Srv6Component app = get(Srv6Component.class);
 
         Device device = deviceService.getDevice(DeviceId.deviceId(uri));
         if (device == null) {

@@ -56,12 +56,19 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 /**
  * Application which handles IPv6 routing.
  */
-@Component(immediate = true, service = Srv6App.class)
-public class Srv6App {
+@Component(immediate = true, service = Srv6Component.class)
+public class Srv6Component {
 
-    private static final Logger log = LoggerFactory.getLogger(Srv6App.class);
+    private static final Logger log = LoggerFactory.getLogger(Srv6Component.class);
 
     private static final String APP_NAME = AppConstants.APP_PREFIX + ".srv6";
+
+    //--------------------------------------------------------------------------
+    // ONOS CORE SERVICE BINDING
+    //
+    // These variables are set by the Karaf runtime environment before calling
+    // the activate() method.
+    //--------------------------------------------------------------------------
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private CoreService coreService;
@@ -78,9 +85,16 @@ public class Srv6App {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private NetworkConfigService networkConfigService;
 
-    private final DeviceListener deviceListener = new Srv6App.InternalDeviceListener();
+    private final DeviceListener deviceListener = new Srv6Component.InternalDeviceListener();
 
     private ApplicationId appId;
+
+    //--------------------------------------------------------------------------
+    // COMPONENT ACTIVATION.
+    //
+    // When loading/unloading the app the Karaf runtime environment will call
+    // activate()/deactivate().
+    //--------------------------------------------------------------------------
 
     @Activate
     protected void activate() {
@@ -109,35 +123,11 @@ public class Srv6App {
         log.info("Stopped");
     }
 
-    /**
-     * Sets up SRv6 My SID table on all devices known by ONOS and for which this ONOS
-     * node instance is currently master.
-     */
-    private synchronized void setUpAllDevices() {
-        // Set up host routes
-        stream(deviceService.getAvailableDevices())
-                .map(Device::id)
-                .filter(mastershipService::isLocalMaster)
-                .forEach(this::setUpMySidTable);
-    }
-
-    /**
-     * Cleans up SRv6 My SID table and any custom insert policies.
-     */
-    private void cleanUpAllDevices() {
-        Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
-                .map(Device::id)
-                .filter(mastershipService::isLocalMaster)
-                .collect(Collectors.toSet());
-
-        for (DeviceId deviceId : deviceIds) {
-            FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-            stream(flowRuleService.getFlowEntries(deviceId))
-                    .filter(fe -> fe.appId() == appId.id())
-                    .forEach(ops::remove);
-            flowRuleService.apply(ops.build());
-        }
-    }
+    //--------------------------------------------------------------------------
+    // METHODS TO COMPLETE.
+    //
+    // Complete the implementation wherever you see TODO.
+    //--------------------------------------------------------------------------
 
     /**
      * Populate the My SID table from the network configuration for the specified device.
@@ -145,23 +135,21 @@ public class Srv6App {
      * @param deviceId the device Id
      */
     private void setUpMySidTable(DeviceId deviceId) {
-        getDeviceConfig(deviceId).ifPresent(config -> {
-            Ip6Address mySid = config.mySid();
-            PiCriterion match = PiCriterion.builder()
-                    .matchTernary(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
-                            mySid.toOctets(), Ip6Address.makeMaskPrefix(128).toOctets())
-                    .build();
-            PiTableAction action = PiAction.builder()
-                    .withId(PiActionId.of("FabricIngress.srv6_end"))
-                    .build();
+        Ip6Address mySid = getMySid(deviceId);
+        PiCriterion match = PiCriterion.builder()
+                .matchTernary(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
+                        mySid.toOctets(), Ip6Address.makeMaskPrefix(128).toOctets())
+                .build();
+        PiTableAction action = PiAction.builder()
+                .withId(PiActionId.of("FabricIngress.srv6_end"))
+                .build();
 
-            FlowRule myStationRule = Utils.forgeFlowRule(
-                    deviceId, appId,
-                    "FabricIngress.srv6_my_sid",
-                    match, action);
+        FlowRule myStationRule = Utils.forgeFlowRule(
+                deviceId, appId,
+                "FabricIngress.srv6_my_sid",
+                match, action);
 
-            flowRuleService.applyFlowRules(myStationRule);
-        });
+        flowRuleService.applyFlowRules(myStationRule);
     }
 
     /**
@@ -174,15 +162,13 @@ public class Srv6App {
      */
     public void insertSrv6InsertRule(DeviceId deviceId, Ip6Address destIp, int prefixLength,
                                      List<Ip6Address> segmentList) {
+        if (segmentList.size() < 2 || segmentList.size() > 3) {
+            throw new RuntimeException("List of " + segmentList.size() + " segments is not supported");
+        }
 
         PiCriterion match = PiCriterion.builder()
                 .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"), destIp.toOctets(), prefixLength)
                 .build();
-
-
-        if (segmentList.size() < 2 || segmentList.size() > 3) {
-            throw new RuntimeException("List of " + segmentList.size() + " segments is not supported");
-        }
 
         AtomicInteger segmentIndex = new AtomicInteger();
         List<PiActionParam> actionParams = segmentList.stream()
@@ -217,16 +203,11 @@ public class Srv6App {
         flowRuleService.apply(ops.build());
     }
 
-    /**
-     * Returns the Srv6 config for the given device.
-     *
-     * @param deviceId the device ID
-     * @return Srv6  device config
-     */
-    private Optional<Srv6DeviceConfig> getDeviceConfig(DeviceId deviceId) {
-        Srv6DeviceConfig config = networkConfigService.getConfig(deviceId, Srv6DeviceConfig.class);
-        return Optional.ofNullable(config);
-    }
+    //--------------------------------------------------------------------------
+    // EVENT LISTENERS
+    //
+    // Events are processed only if isRelevant() returns true.
+    //--------------------------------------------------------------------------
 
     public class InternalDeviceListener implements DeviceListener {
         @Override
@@ -239,5 +220,64 @@ public class Srv6App {
         public void event(DeviceEvent event) {
             setUpMySidTable(event.subject().id());
         }
+    }
+
+
+    //--------------------------------------------------------------------------
+    // UTILITY METHODS
+    //--------------------------------------------------------------------------
+
+    /**
+     * Sets up SRv6 My SID table on all devices known by ONOS and for which this ONOS
+     * node instance is currently master.
+     */
+    private synchronized void setUpAllDevices() {
+        // Set up host routes
+        stream(deviceService.getAvailableDevices())
+                .map(Device::id)
+                .filter(mastershipService::isLocalMaster)
+                .forEach(this::setUpMySidTable);
+    }
+
+    /**
+     * Cleans up SRv6 My SID table and any custom insert policies.
+     */
+    private void cleanUpAllDevices() {
+        Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
+                .map(Device::id)
+                .filter(mastershipService::isLocalMaster)
+                .collect(Collectors.toSet());
+
+        for (DeviceId deviceId : deviceIds) {
+            FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
+            stream(flowRuleService.getFlowEntries(deviceId))
+                    .filter(fe -> fe.appId() == appId.id())
+                    .forEach(ops::remove);
+            flowRuleService.apply(ops.build());
+        }
+    }
+
+    /**
+     * Returns the Srv6 config for the given device.
+     *
+     * @param deviceId the device ID
+     * @return Srv6  device config
+     */
+    private Optional<Srv6DeviceConfig> getDeviceConfig(DeviceId deviceId) {
+        Srv6DeviceConfig config = networkConfigService.getConfig(deviceId, Srv6DeviceConfig.class);
+        return Optional.ofNullable(config);
+    }
+
+    /**
+     * Returns Srv6 SID for the given device.
+     *
+     * @param deviceId the device ID
+     * @return SID for the device
+     */
+    private Ip6Address getMySid(DeviceId deviceId) {
+        return getDeviceConfig(deviceId)
+                .map(Srv6DeviceConfig::mySid)
+                .orElseThrow(() -> new RuntimeException(
+                        "Missing mySid config for " + deviceId));
     }
 }

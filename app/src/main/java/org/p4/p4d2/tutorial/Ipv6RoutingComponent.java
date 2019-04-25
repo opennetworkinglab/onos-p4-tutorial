@@ -367,13 +367,9 @@ public class Ipv6RoutingComponent {
             MacAddress leafMac = getMyStationMac(leafId);
             final Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
 
-            //FIXME: This should be added in exercise 3
-            getDeviceConfig(leafId).ifPresent(config -> {
-                Ip6Address sid = config.mySid();
-                if (sid != null) {
-                    subnetsToRoute.add(Ip6Prefix.valueOf(sid, 128));
-                }
-            });
+            // FIXME: This should be added in exercise 3
+            Ip6Address leafSid = getDeviceSid(leafId);
+            subnetsToRoute.add(Ip6Prefix.valueOf(leafSid, 128));
             // ---- end exercise 3 addition
 
             if (subnetsToRoute.isEmpty()) {
@@ -430,22 +426,22 @@ public class Ipv6RoutingComponent {
                 .map(subnet -> createRoutingRule(leafId, subnet, groupId))
                 .collect(Collectors.toList());
 
-        //FIXME exercise 3 add spine sid rules
+        // FIXME exercise 3 add spine sid rules
         stream(deviceService.getDevices())
                 .map(Device::id)
-                .forEach(spineId -> getDeviceConfig(spineId).ifPresent(spineConfig -> {
-                    if (spineConfig.isSpine()) {
-                        MacAddress spineMac = spineConfig.myStationMac();
-                        int spineGroupId = macToGroupId(spineMac);
-                        GroupDescription group = createNextHopGroup(
-                                spineGroupId, Collections.singleton(spineMac), leafId);
-                        insertInOrder(group, Collections.singleton(
-                                createRoutingRule(leafId, Ip6Prefix.valueOf(spineConfig.mySid(), 128),
-                                                  spineGroupId)));
-                    }
-                }));
-        // --- end exercise 3
+                .filter(this::isSpine)
+                .forEach(spineId -> {
+                    MacAddress spineMac = getMyStationMac(spineId);
+                    Ip6Address spineSid = getDeviceSid(spineId);
+                    int spineGroupId = macToGroupId(spineMac);
+                    GroupDescription group = createNextHopGroup(
+                            spineGroupId, Collections.singleton(spineMac), leafId);
+                    insertInOrder(group, Collections.singleton(
+                            createRoutingRule(leafId, Ip6Prefix.valueOf(spineSid, 128),
+                                    spineGroupId)));
 
+                });
+        // --- end exercise 3
         insertInOrder(ecmpGroup, flowRules);
     }
 
@@ -604,6 +600,19 @@ public class Ipv6RoutingComponent {
             log.error("Interrupted!", e);
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Gets Srv6 SID for the given device.
+     *
+     * @param deviceId the device ID
+     * @return SID for the device
+     */
+    private Ip6Address getDeviceSid(DeviceId deviceId) {
+        return getDeviceConfig(deviceId)
+                .map(Srv6DeviceConfig::mySid)
+                .orElseThrow(() -> new RuntimeException(
+                        "Missing mySid config for " + deviceId));
     }
 
     /**
