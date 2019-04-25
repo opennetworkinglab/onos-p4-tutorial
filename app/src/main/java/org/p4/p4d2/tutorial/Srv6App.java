@@ -13,39 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.p4.p4d2.tutorial;
 
-import org.onlab.packet.*;
+import org.onlab.packet.Ip6Address;
 import org.onlab.util.SharedScheduledExecutors;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
-import org.onosproject.net.*;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
 import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleOperations;
-import org.onosproject.net.flow.FlowRuleOperationsContext;
 import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
 import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiActionParamId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
+import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
-import org.onosproject.net.pi.runtime.PiActionProfileGroupId;
 import org.onosproject.net.pi.runtime.PiTableAction;
-import org.onosproject.store.service.StorageService;
 import org.osgi.service.component.annotations.*;
 import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
 import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -63,9 +63,6 @@ public class Srv6App {
 
     private static final String APP_NAME = AppConstants.APP_PREFIX + ".srv6";
 
-    private static final long GROUP_INSTALLATION_DELAY = 500;
-    private static final int DEFAULT_ECMP_GROUP_ID = 0xec3b0000;
-
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private CoreService coreService;
 
@@ -74,9 +71,6 @@ public class Srv6App {
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private MastershipService mastershipService;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private StorageService storageService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private DeviceService deviceService;
@@ -116,7 +110,7 @@ public class Srv6App {
     }
 
     /**
-     * FIXME Sets up IPv6 routing on all devices known by ONOS and for which this ONOS
+     * Sets up SRv6 My SID table on all devices known by ONOS and for which this ONOS
      * node instance is currently master.
      */
     private synchronized void setUpAllDevices() {
@@ -124,15 +118,11 @@ public class Srv6App {
         stream(deviceService.getAvailableDevices())
                 .map(Device::id)
                 .filter(mastershipService::isLocalMaster)
-                .forEach(deviceId -> {
-                    log.info("setting up {}", deviceId);
-                    setUpMySidTable(deviceId);
-                });
+                .forEach(this::setUpMySidTable);
     }
 
     /**
-     * FIXME Cleans up IPv6 routing runtime configuration from all for which this ONOS
-     * node instance is currently master.
+     * Cleans up SRv6 My SID table and any custom insert policies.
      */
     private void cleanUpAllDevices() {
         Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
@@ -142,24 +132,15 @@ public class Srv6App {
 
         for (DeviceId deviceId : deviceIds) {
             FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-            FlowRuleOperationsContext callback = new FlowRuleOperationsContext() {
-                @Override
-                public void onSuccess(FlowRuleOperations ops) {
-                    //FIXME
-//                    groupService.getGroups(deviceId, appId)
-//                            .forEach(group -> groupService.removeGroup(
-//                                    deviceId, group.appCookie(), appId));
-                }
-            };
             stream(flowRuleService.getFlowEntries(deviceId))
                     .filter(fe -> fe.appId() == appId.id())
                     .forEach(ops::remove);
-            flowRuleService.apply(ops.build(callback));
+            flowRuleService.apply(ops.build());
         }
     }
 
     /**
-     * FIXME
+     * Populate the My SID table from the network configuration for the specified device.
      *
      * @param deviceId the device Id
      */
@@ -180,20 +161,19 @@ public class Srv6App {
                     match, action);
 
             flowRuleService.applyFlowRules(myStationRule);
-            //FIXME add routes
         });
     }
 
     /**
-     * FIXME Insert a next hope flow rule in the L2 table, matching on the given
-     * destination MAC and with the given output port.
-     *  @param dstMac   the next hop (destination) mac
-     * @param outPort  the output port
-     * @param deviceId the device
-     * @param prefixLength
+     * Insert a SRv6 transit insert policy that will inject an SRv6 header for packets destined to destIp.
+     *
+     * @param deviceId     device ID
+     * @param destIp       target IP address for the SRv6 policy
+     * @param prefixLength prefix length for the target IP
+     * @param segmentList  list of SRv6 SIDs that make up the path
      */
     public void insertSrv6InsertRule(DeviceId deviceId, Ip6Address destIp, int prefixLength,
-                                      List<Ip6Address> segmentList) {
+                                     List<Ip6Address> segmentList) {
 
         PiCriterion match = PiCriterion.builder()
                 .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"), destIp.toOctets(), prefixLength)
@@ -224,32 +204,17 @@ public class Srv6App {
     }
 
     /**
-     * Creates a routing flow rule that matches on the given IPv6 prefix and
-     * executes the given group ID.
+     * Remove all SRv6 transit insert polices for the specified device.
      *
-     * @param deviceId  the device where flow rule will be installed
-     * @param ip6Prefix the IPv6 prefix
-     * @param groupId   the group ID
-     * @return a flow rule
+     * @param deviceId device ID
      */
-    private FlowRule createRoutingRule(
-            DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
-
-        // From P4Info.
-        String matchFieldId = "hdr.ipv6.dst_addr";
-        String tableId = "FabricIngress.l3_table";
-
-        // Match: LPM on IPv6 address.
-        PiCriterion match = PiCriterion.builder()
-                .matchLpm(PiMatchFieldId.of(matchFieldId),
-                          ip6Prefix.address().toOctets(),
-                          ip6Prefix.prefixLength())
-                .build();
-
-        // Action: set action profile group ID
-        PiTableAction action = PiActionProfileGroupId.of(groupId);
-
-        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
+    public void clearSrv6InsertRules(DeviceId deviceId) {
+        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
+        stream(flowRuleService.getFlowEntries(deviceId))
+                .filter(fe -> fe.appId() == appId.id())
+                .filter(fe -> fe.table().equals(PiTableId.of("FabricIngress.srv6_transit")))
+                .forEach(ops::remove);
+        flowRuleService.apply(ops.build());
     }
 
     /**

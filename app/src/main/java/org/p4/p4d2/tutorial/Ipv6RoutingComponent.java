@@ -430,6 +430,22 @@ public class Ipv6RoutingComponent {
                 .map(subnet -> createRoutingRule(leafId, subnet, groupId))
                 .collect(Collectors.toList());
 
+        //FIXME exercise 3 add spine sid rules
+        stream(deviceService.getDevices())
+                .map(Device::id)
+                .forEach(spineId -> getDeviceConfig(spineId).ifPresent(spineConfig -> {
+                    if (spineConfig.isSpine()) {
+                        MacAddress spineMac = spineConfig.myStationMac();
+                        int spineGroupId = macToGroupId(spineMac);
+                        GroupDescription group = createNextHopGroup(
+                                spineGroupId, Collections.singleton(spineMac), leafId);
+                        insertInOrder(group, Collections.singleton(
+                                createRoutingRule(leafId, Ip6Prefix.valueOf(spineConfig.mySid(), 128),
+                                                  spineGroupId)));
+                    }
+                }));
+        // --- end exercise 3
+
         insertInOrder(ecmpGroup, flowRules);
     }
 
