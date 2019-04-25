@@ -363,7 +363,7 @@ class P4RuntimeTest(BaseTest):
         election_id.low = self.election_id
         return req
 
-    def add_mcast_group(self, group_id, ports):
+    def insert_pre_multicast_group(self, group_id, ports):
         req = self.get_new_write_request()
         update = req.updates.add()
         update.type = p4runtime_pb2.Update.INSERT
@@ -376,8 +376,8 @@ class P4RuntimeTest(BaseTest):
             replica.instance = 0
         return req, self.write_request(req)
 
-    def insert_clone_session(self, session_id, ports, cos=0,
-                             packet_length_bytes=0):
+    def insert_pre_clone_session(self, session_id, ports, cos=0,
+                                 packet_length_bytes=0):
         req = self.get_new_write_request()
         update = req.updates.add()
         update.type = p4runtime_pb2.Update.INSERT

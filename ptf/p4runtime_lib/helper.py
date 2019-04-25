@@ -88,20 +88,24 @@ class P4InfoHelper(object):
             return lambda x: self.get_name(primitive, x)
 
         raise AttributeError(
-            "%r object has no attribute %r" % (self.__class__, attr))
+            "%r object has no attribute %r (check your P4Info)"
+            % (self.__class__, attr))
 
     def get_match_field(self, table_name, name=None, id=None):
+        t = None
         for t in self.p4info.tables:
-            pre = t.preamble
-            if pre.name == table_name:
-                for mf in t.match_fields:
-                    if name is not None:
-                        if mf.name == name:
-                            return mf
-                    elif id is not None:
-                        if mf.id == id:
-                            return mf
-        raise AttributeError("%r has no attribute %r"
+            if t.preamble.name == table_name:
+                break
+        if not t:
+            raise AttributeError("No such table %r in P4Info" % table_name)
+        for mf in t.match_fields:
+            if name is not None:
+                if mf.name == name:
+                    return mf
+            elif id is not None:
+                if mf.id == id:
+                    return mf
+        raise AttributeError("%r has no match field %r (check your P4Info)"
                              % (table_name, name if name is not None else id))
 
     def get_packet_metadata(self, meta_type, name=None, id=None):
@@ -115,8 +119,9 @@ class P4InfoHelper(object):
                     elif id is not None:
                         if m.id == id:
                             return m
-        raise AttributeError("ControllerPacketMetadata '%r' has no metadata %r"
-                             % (meta_type, name if name is not None else id))
+        raise AttributeError(
+            "ControllerPacketMetadata '%r' has no metadata %r (check your P4Info)"
+            % (meta_type, name if name is not None else id))
 
     def get_match_field_id(self, table_name, match_field_name):
         return self.get_match_field(table_name, name=match_field_name).id
@@ -161,7 +166,7 @@ class P4InfoHelper(object):
                         if p.id == id:
                             return p
         raise AttributeError(
-            "action %r has no param %r"
+            "Action %r has no param %r (check your P4Info)"
             % (action_name, name if name is not None else id))
 
     def get_action_param_id(self, action_name, param_name):
@@ -178,12 +183,12 @@ class P4InfoHelper(object):
         return p4runtime_param
 
     def build_table_entry(self,
-                        table_name,
-                        match_fields=None,
-                        default_action=False,
-                        action_name=None,
-                        action_params=None,
-                        priority=None):
+                          table_name,
+                          match_fields=None,
+                          default_action=False,
+                          action_name=None,
+                          action_params=None,
+                          priority=None):
         table_entry = p4runtime_pb2.TableEntry()
         table_entry.table_id = self.get_tables_id(table_name)
 
@@ -209,7 +214,7 @@ class P4InfoHelper(object):
                 ])
         return table_entry
 
-    def buildPacketOut(self, payload, metadata=None):
+    def build_packet_out(self, payload, metadata=None):
         packet_out = p4runtime_pb2.PacketOut()
         packet_out.payload = payload
         if not metadata:
