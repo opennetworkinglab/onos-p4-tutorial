@@ -37,9 +37,15 @@ CPU_CLONE_SESSION_ID = 99
 class PacketOutTest(P4RuntimeTest):
     """Tests PacketOut capability."""
 
-    def runPacketOutTest(self, pkt):
+    def runTest(self):
+        for pkt_type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
+            print_inline("%s ... " % pkt_type)
+            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
+            self.testPacket(pkt)
+
+    def testPacket(self, pkt):
         for outport in [self.port1, self.port2]:
-            # Forge PacketOut message.
+            # Build PacketOut message.
             packet_out_msg = self.helper.build_packet_out(
                 payload=str(pkt),
                 metadata={
@@ -51,26 +57,26 @@ class PacketOutTest(P4RuntimeTest):
         # Make sure packet was forwarded only on the specified ports
         testutils.verify_no_other_packets(self)
 
-    def runTest(self):
-        for t in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
-            print_inline("%s ... " % t)
-            pkt = getattr(testutils, "simple_%s_packet" % t)()
-            self.runPacketOutTest(pkt)
-
 
 @group("packetio")
 class PacketInTest(P4RuntimeTest):
     """Tests PacketIn capability my matching on the packet EtherType"""
 
+    def runTest(self):
+        for pkt_type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
+            print_inline("%s ... " % pkt_type)
+            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
+            self.testPacket(pkt)
+
     @autocleanup
-    def runPacketInTest(self, pkt):
-        eth_type = pkt[Ether].type
+    def testPacket(self, pkt):
 
         self.insert_pre_clone_session(
             session_id=CPU_CLONE_SESSION_ID,
             ports=[self.cpu_port])
 
         # Match on the given pkt's EtherType.
+        eth_type = pkt[Ether].type
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.acl",
             match_fields={
@@ -87,9 +93,3 @@ class PacketInTest(P4RuntimeTest):
             testutils.send_packet(self, inport, str(pkt))
             # TODO: make verifying packet_in generic by passing metadata
             self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
-
-    def runTest(self):
-        for type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:
-            print_inline("%s ... " % type)
-            pkt = getattr(testutils, "simple_%s_packet" % type)()
-            self.runPacketInTest(pkt)

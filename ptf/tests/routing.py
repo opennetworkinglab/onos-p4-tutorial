@@ -68,8 +68,17 @@ class NdpReplyGenTest(P4RuntimeTest):
 class IPv6RoutingTest(P4RuntimeTest):
     """Tests basic IPv6 routing"""
 
+    def runTest(self):
+        for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
+            print_inline("%s ... " % pkt_type)
+            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
+            self.testPacket(pkt)
+
     @autocleanup
-    def doRunTest(self, pkt, next_hop_mac):
+    def testPacket(self, pkt):
+        next_hop_mac = SWITCH2_MAC
+
+        # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_my_station",
             match_fields={
@@ -79,6 +88,7 @@ class IPv6RoutingTest(P4RuntimeTest):
             action_name="NoAction"
         ))
 
+        # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
             act_prof_name="FabricIngress.ecmp_selector",
             group_id=1,
@@ -88,15 +98,17 @@ class IPv6RoutingTest(P4RuntimeTest):
             ]
         ))
 
+        # Map pkt's IPv6 dst addr to group
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l3_table",
             match_fields={
                 # LPM match (value, prefix)
-                "hdr.ipv6.dst_addr": (pkt[IPv6].dst,  128)
+                "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
             },
             group_id=1
         ))
 
+        # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
@@ -109,18 +121,10 @@ class IPv6RoutingTest(P4RuntimeTest):
             }
         ))
 
+        # Expected pkt should have routed MAC addresses and decremented TTL
         exp_pkt = pkt.copy()
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
 
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, exp_pkt, self.port2)
-
-    def runTest(self):
-        for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
-            print_inline("%s ... " % pkt_type)
-            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(
-                eth_src=HOST1_MAC, eth_dst=SWITCH1_MAC,
-                ipv6_src=HOST1_IPV6, ipv6_dst=HOST2_IPV6
-            )
-            self.doRunTest(pkt, HOST2_MAC)

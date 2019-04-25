@@ -39,8 +39,18 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
     well as cloning to CPU (controller) for host discovery
     """
 
+    def runTest(self):
+        print_inline("ARP request ... ")
+        arp_pkt = testutils.simple_arp_packet()
+        self.testPacket(arp_pkt)
+
+        print_inline("NDP NS ... ")
+        ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
+                              target_ip=HOST2_IPV6)
+        self.testPacket(ndp_pkt)
+
     @autocleanup
-    def test(self, pkt):
+    def testPacket(self, pkt):
         mcast_group_id = 10
         mcast_ports = [self.port1, self.port2, self.port3]
 
@@ -112,25 +122,17 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
 
         for inport in mcast_ports:
             testutils.send_packet(self, inport, str(pkt))
+
             # Pkt should be received on CPU...
             self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
+
             # ...and on all ports except the ingress one.
             verify_ports = set(mcast_ports)
             verify_ports.discard(inport)
             for port in verify_ports:
                 testutils.verify_packet(self, pkt, port)
+
         testutils.verify_no_other_packets(self)
-
-    @autocleanup
-    def runTest(self):
-        print_inline("ARP request ... ")
-        arp_pkt = testutils.simple_arp_packet()
-        self.test(arp_pkt)
-
-        print_inline("NDP NS ... ")
-        ndp_pkt = genNdpNsPkt(src_mac=HOST1_MAC, src_ip=HOST1_IPV6,
-                              target_ip=HOST2_IPV6)
-        self.test(ndp_pkt)
 
 
 @group("bridging")
@@ -139,8 +141,19 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
     requesting host.
     """
 
+    def runTest(self):
+        print_inline("ARP reply ... ")
+        # op=1 request, op=2 relpy
+        arp_pkt = testutils.simple_arp_packet(
+            eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
+        self.testPacket(arp_pkt)
+
+        print_inline("NDP NA ... ")
+        ndp_pkt = genNdpNaPkt(target_ip=HOST1_IPV6, target_mac=HOST1_MAC)
+        self.testPacket(ndp_pkt)
+
     @autocleanup
-    def test(self, pkt):
+    def testPacket(self, pkt):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
@@ -187,32 +200,25 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
         self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port1)
         testutils.verify_packet(self, pkt, self.port2)
 
-    def runTest(self):
-        print_inline("ARP reply ... ")
-        # op=1 request, op=2 relpy
-        arp_pkt = testutils.simple_arp_packet(
-            eth_src=HOST1_MAC, eth_dst=HOST2_MAC, arp_op=2)
-        self.test(arp_pkt)
-
-        print_inline("NDP NA ... ")
-        ndp_pkt = genNdpNaPkt(target_ip=HOST1_IPV6, target_mac=HOST1_MAC)
-        self.test(ndp_pkt)
-
 
 @group("bridging")
 class BridgingTest(P4RuntimeTest):
     """Tests basic L2 forwarding"""
 
+    def runTest(self):
+        for pkt_type in ["tcp", "udp", "icmp", "tcpv6", "udpv6", "icmpv6"]:
+            print_inline("%s ... " % pkt_type)
+            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(pktlen=120)
+            self.testPacket(pkt)
+
     @autocleanup
-    def runBridgingTest(self, pkt):
-        mac_src = pkt[Ether].src
-        mac_dst = pkt[Ether].dst
+    def testPacket(self, pkt):
 
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": mac_dst
+                "hdr.ethernet.dst_addr": pkt[Ether].dst
             },
             action_name="FabricIngress.set_output_port",
             action_params={
@@ -220,11 +226,14 @@ class BridgingTest(P4RuntimeTest):
             }
         ))
 
+        # Test bidirectional forwarding by swapping MAC addresses on the pkt
+        pkt2 = pkt_mac_swap(pkt.copy())
+
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": mac_src
+                "hdr.ethernet.dst_addr": pkt2[Ether].dst
             },
             action_name="FabricIngress.set_output_port",
             action_params={
@@ -232,17 +241,8 @@ class BridgingTest(P4RuntimeTest):
             }
         ))
 
-        # Test bidirectional forwarding by swapping addresses on the given pkt
-        pkt2 = pkt_mac_swap(pkt.copy())
-
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.send_packet(self, self.port2, str(pkt2))
 
         testutils.verify_each_packet_on_each_port(
             self, [pkt, pkt2], [self.port2, self.port1])
-
-    def runTest(self):
-        for pkt_type in ["tcp", "udp", "icmp", "tcpv6", "udpv6", "icmpv6"]:
-            print_inline("%s ... " % pkt_type)
-            pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(pktlen=120)
-            self.runBridgingTest(pkt)
