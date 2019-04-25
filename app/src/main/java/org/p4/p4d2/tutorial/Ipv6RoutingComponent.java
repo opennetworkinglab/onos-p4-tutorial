@@ -70,6 +70,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -87,6 +89,9 @@ public class Ipv6RoutingComponent {
     private static final String APP_NAME = AppConstants.APP_PREFIX + ".ipv6routing";
 
     private static final long GROUP_INSTALLATION_DELAY = 500;
+
+    // Number of threads to handle host and link event.
+    private static final int NUM_THREADS = 2;
     private static final int DEFAULT_ECMP_GROUP_ID = 0xec3b0000;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
@@ -119,6 +124,7 @@ public class Ipv6RoutingComponent {
     private final HostListener hostListener = new InternalHostListener();
     private final LinkListener linkListener = new InternalLinkListener();
 
+    private ExecutorService executorService;
     private ApplicationId appId;
 
     @Activate
@@ -130,6 +136,8 @@ public class Ipv6RoutingComponent {
 
         hostService.addListener(hostListener);
         linkService.addListener(linkListener);
+
+        executorService = Executors.newFixedThreadPool(NUM_THREADS);
 
         // Schedule set up for all devices.
         SharedScheduledExecutors.newTimeout(
@@ -584,9 +592,7 @@ public class Ipv6RoutingComponent {
             DeviceId deviceId = host.location().deviceId();
             log.info("{} event! host={}, deviceId={}, port={}",
                      event.type(), host.id(), deviceId, host.location().port());
-            if (event.type() == HostEvent.Type.HOST_ADDED) {
-                setUpHostRules(deviceId, host);
-            }
+            executorService.submit(() -> setUpHostRules(deviceId, host));
         }
 
         @Override
@@ -614,7 +620,6 @@ public class Ipv6RoutingComponent {
     /**
      * Listener of link events.
      */
-    // FIXME: Do we need to rely on device events as well?
     class InternalLinkListener implements LinkListener {
 
         @Override
@@ -622,17 +627,20 @@ public class Ipv6RoutingComponent {
             DeviceId srcDev = event.subject().src().deviceId();
             DeviceId dstDev = event.subject().dst().deviceId();
             log.info("{} event! src={}, dst={}", event.type(), srcDev, dstDev);
-            if (event.type() == LinkEvent.Type.LINK_ADDED) {
-                if (mastershipService.isLocalMaster(srcDev)) {
+
+            if (mastershipService.isLocalMaster(srcDev)) {
+                executorService.submit(() -> {
                     setUpMyStationTable(srcDev);
                     setUpRoute(srcDev);
                     setUpNextHopRules(srcDev);
-                }
-                if (mastershipService.isLocalMaster(dstDev)) {
+                });
+            }
+            if (mastershipService.isLocalMaster(dstDev)) {
+                executorService.submit(() -> {
                     setUpMyStationTable(dstDev);
                     setUpRoute(dstDev);
                     setUpNextHopRules(dstDev);
-                }
+                });
             }
         }
 
