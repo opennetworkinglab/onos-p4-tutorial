@@ -22,7 +22,7 @@
 
 from ptf.testutils import group
 
-from base_test import *
+from lib.base_test import *
 
 
 @group("routing")

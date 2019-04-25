@@ -33,7 +33,7 @@ import grpc
 from p4.tmp import p4config_pb2
 from p4.v1 import p4runtime_pb2
 
-from bmv2 import Bmv2Switch
+from lib.bmv2 import Bmv2Switch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PTF runner")

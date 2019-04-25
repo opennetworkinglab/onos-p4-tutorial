@@ -22,12 +22,12 @@
 
 from ptf.testutils import group
 
-from base_test import *
+from lib.base_test import *
 
 # ------------------------------------------------------------------------------
-# P4INFO CONSTANTS
+# P4 CONSTANTS
 #
-# Modify to match the content of your P4Info file.
+# Modify to match the content of your P4 program or P4Info file.
 # ------------------------------------------------------------------------------
 
 CPU_CLONE_SESSION_ID = 99
@@ -86,9 +86,7 @@ class PacketInTest(P4RuntimeTest):
             # port as part of PacketIn metadata fields.
             testutils.send_packet(self, inport, str(pkt))
             # TODO: make verifying packet_in generic by passing metadata
-            self.verify_packet_in(
-                exp_pkt=pkt, exp_in_port=inport,
-                inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
 
     def runTest(self):
         for type in ["tcp", "udp", "icmp", "arp", "tcpv6", "udpv6", "icmpv6"]:

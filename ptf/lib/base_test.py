@@ -46,7 +46,7 @@ from scapy.layers.l2 import Ether
 from scapy.pton_ntop import inet_pton, inet_ntop
 from scapy.utils6 import in6_getnsma, in6_getnsmac
 
-from p4runtime_lib.helper import P4InfoHelper
+from lib.helper import P4InfoHelper
 
 DEFAULT_PRIORITY = 10
 
@@ -371,7 +371,7 @@ class P4RuntimeTest(BaseTest):
         else:
             return msg.packet
 
-    def verify_packet_in(self, exp_pkt, exp_in_port, inport_meta_id,
+    def verify_packet_in(self, exp_pkt, exp_in_port, inport_meta_id=1,
                          timeout=2):
         pkt_in_msg = self.get_packet_in(timeout=timeout)
         in_port_ = stringify(exp_in_port, 2)

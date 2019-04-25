@@ -23,17 +23,15 @@
 
 from ptf.testutils import group
 
-from base_test import *
+from lib.base_test import *
 
 # ------------------------------------------------------------------------------
-# P4INFO CONSTANTS
+# P4 CONSTANTS
 #
-# Modify to match the content of your P4Info file.
+# Modify to match the content of your P4 program or P4Info file.
 # ------------------------------------------------------------------------------
 
 CPU_CLONE_SESSION_ID = 99
-PACKET_IN_INGRESS_PORT_META_ID = 1
-
 
 @group("bridging")
 class ArpNdpRequestWithCloneTest(P4RuntimeTest):
@@ -115,8 +113,7 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         for inport in mcast_ports:
             testutils.send_packet(self, inport, str(pkt))
             # Pkt should be received on CPU...
-            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport,
-                                  inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
             # ...and on all ports except the ingress one.
             verify_ports = set(mcast_ports)
             verify_ports.discard(inport)
@@ -187,8 +184,7 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
 
         testutils.send_packet(self, self.port1, str(pkt))
 
-        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port1,
-                              inport_meta_id=PACKET_IN_INGRESS_PORT_META_ID)
+        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port1)
         testutils.verify_packet(self, pkt, self.port2)
 
     def runTest(self):
