@@ -31,8 +31,8 @@ class Srv6InsertTest(P4RuntimeTest):
 
     def runTest(self):
         sid_lists = (
-            [SWITCH1_IPV6, SWITCH2_IPV6, HOST2_IPV6],
-            [SWITCH1_IPV6, HOST2_IPV6],
+            [SWITCH2_IPV6, SWITCH3_IPV6, HOST2_IPV6],
+            [SWITCH2_IPV6, HOST2_IPV6],
         )
         for sid_list in sid_lists:
             for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
@@ -45,7 +45,7 @@ class Srv6InsertTest(P4RuntimeTest):
     def testPacket(self, pkt, sid_list):
         # l2_my_station -> srv6_transit -> l3_table -> l2_exact_table
 
-        next_hop_mac = SWITCH1_MAC
+        next_hop_mac = SWITCH2_MAC
 
         # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
@@ -68,7 +68,6 @@ class Srv6InsertTest(P4RuntimeTest):
         sid_len = len(sid_list)
         action_name = "FabricIngress.srv6_t_insert_%d" % sid_len
         actions_params = {"s%d" % (x + 1): sid_list[x] for x in range(sid_len)}
-
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_transit",
             match_fields={
@@ -127,11 +126,77 @@ class Srv6InsertTest(P4RuntimeTest):
             len=sid_len * 2,
             segleft=sid_len - 1,
             lastentry=sid_len - 1)
-        exp_pkt[IPv6].payload = srv6_hdr / exp_pkt[IPv6].payload
+        exp_pkt[IPv6].nh = 43  # next header is SR header
+        exp_pkt[IPv6].payload = srv6_hdr / pkt[IPv6].payload
 
+        pkt.show2()
+
+        if TCP in exp_pkt:
+            exp_pkt[TCP].chksum = pkt[TCP].checksum()
         if ICMPv6EchoRequest in exp_pkt:
             # FIXME: the P4 pipeline should calculate correct ICMPv6 checksum
             exp_pkt[ICMPv6EchoRequest].cksum = pkt[ICMPv6EchoRequest].cksum
 
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.verify_packet(self, exp_pkt, self.port2)
+
+
+@group("srv6")
+class FabricSrv6TransitTest(P4RuntimeTest):
+    """Tests SRv6 transit behavior"""
+
+    def runTest(self):
+        sid_lists = (
+            [SWITCH2_IPV6, SWITCH3_IPV6, HOST2_IPV6],
+            [SWITCH3_IPV6, HOST2_IPV6],
+        )
+        for sid_list in sid_lists:
+            for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
+                print "Testing %s packet with %d segments ..." % (
+                    pkt_type, len(sid_list))
+                pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
+                self.testPacket(pkt, sid_list)
+
+    @autocleanup
+    def doRunTest(self, pkt, sid_list):
+        # l2_my_station -> l3_table -> l2_exact_table
+        # No changes to SRH header
+        next_hop_mac = SWITCH2_MAC
+
+        # Consider pkt's mac dst addr as my station address
+        self.insert(self.helper.build_table_entry(
+            table_name="FabricIngress.l2_my_station",
+            match_fields={
+                # Exact match.
+                "hdr.ethernet.dst_addr": pkt[Ether].dst
+            },
+            action_name="NoAction"
+        ))
+
+        self.insert(self.helper.build_table_entry(
+            table_name="FabricIngress.srv6_my_sid",
+            match_fields={
+                # Exact match.
+                "hdr.ipv6.dst_addr": ()
+            },
+            action_name="NoAction"
+        ))
+
+        
+        self.add_l2_my_station_entry(SWITCH2_MAC)
+        self.add_srv6_my_sid_entry(SWITCH2_IPV6)
+        self.add_l3_ecmp_entry(SWITCH3_IPV6, 128, [SWITCH3_MAC])
+        self.add_l2_exact_entry(SWITCH3_MAC, self.port2)
+
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        exp_pkt = Ether(src=SWITCH2_MAC, dst=SWITCH3_MAC)
+        exp_pkt /= IPv6(dst=SWITCH3_IPV6, src=pkt[IPv6].src, hlim=63)
+        exp_pkt /= IPv6ExtHdrSegmentRouting(
+            nh=pkt[IPv6ExtHdrSegmentRouting].nh,
+            addresses=[HOST2_IPV6, SWITCH3_IPV6],
+            len=2 * 2, segleft=1, lastentry=1)
+        exp_pkt /= pkt[IPv6ExtHdrSegmentRouting].payload
+
+        testutils.verify_packet(self, exp_pkt, self.port2)
+

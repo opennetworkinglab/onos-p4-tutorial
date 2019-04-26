@@ -103,6 +103,7 @@ class Bmv2Switch:
             '--initial_pipeline=' + INITIAL_PIPELINE,
             '--cpu_port=%s' % self.cpu_port,
             '--external-hercules-urls=0.0.0.0:%s' % self.grpc_port,
+            '--bmv2_log_level=trace',
         ]
         for port, intf in port_map.items():
             args.append('%d@%s' % (port, intf))
