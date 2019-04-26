@@ -32,6 +32,7 @@ import grpc
 import ptf
 import scapy.packet
 import scapy.utils
+from google.protobuf import text_format
 from google.rpc import status_pb2, code_pb2
 from ipaddress import ip_address
 from p4.config.v1 import p4info_pb2
@@ -146,6 +147,18 @@ def format_pkt_match(received_pkt, expected_pkt):
     finally:
         sys.stdout.close()
         sys.stdout = stdout_save  # Restore the original stdout.
+
+
+def format_pb_msg_match(received_msg, expected_msg):
+    result = StringIO()
+    result.write("========== EXPECTED PROTO ==========\n")
+    result.write(text_format.MessageToString(expected_msg))
+    result.write("========== RECEIVED PROTO ==========\n")
+    result.write(text_format.MessageToString(received_msg))
+    result.write("==============================\n")
+    val = result.getvalue()
+    result.close()
+    return val
 
 
 def pkt_mac_swap(pkt):
@@ -369,31 +382,33 @@ class P4RuntimeTest(BaseTest):
     def get_packet_in(self, timeout=2):
         msg = self.get_stream_packet("packet", timeout)
         if msg is None:
-            self.fail("Packet in not received")
+            self.fail("PacketIn message not received")
         else:
             return msg.packet
 
-    def verify_packet_in(self, exp_pkt, exp_in_port, inport_meta_id=1,
-                         timeout=2):
-        pkt_in_msg = self.get_packet_in(timeout=timeout)
-        in_port_ = stringify(exp_in_port, 2)
-        rx_in_port_ = None
-        for meta in pkt_in_msg.metadata:
-            if meta.metadata_id == inport_meta_id:
-                rx_in_port_ = meta.value
-                break
-        if rx_in_port_ is None:
-            self.fail("No such metadata with ID %d in PacketIn message: %s"
-                      % (inport_meta_id, pkt_in_msg))
-        if in_port_ != rx_in_port_:
-            rx_inport = struct.unpack("!h", rx_in_port_)[inport_meta_idx]
-            self.fail("Wrong PacketIn ingress port, expected {} but received was {}"
-                .format(inport_meta_idx, exp_in_port, rx_inport))
-        rx_pkt = Ether(pkt_in_msg.payload)
+    def verify_packet_in(self, exp_packet_in_msg, timeout=2):
+        rx_packet_in_msg = self.get_packet_in(timeout=timeout)
+
+        # Check payload first, then metadata
+        rx_pkt = Ether(rx_packet_in_msg.payload)
+        exp_pkt = exp_packet_in_msg.payload
         if not match_exp_pkt(exp_pkt, rx_pkt):
-            self.fail(
-                "Received packet-in is not the expected one\n" + format_pkt_match(
-                    rx_pkt, exp_pkt))
+            self.fail("Received PacketIn.payload is not the expected one\n"
+                      + format_pkt_match(rx_pkt, exp_pkt))
+
+        rx_meta_dict = {m.metadata_id: m.value
+                        for m in rx_packet_in_msg.metadata}
+        exp_meta_dict = {m.metadata_id: m.value
+                         for m in exp_packet_in_msg.metadata}
+        shared_meta = {mid: rx_meta_dict[mid] for mid in rx_meta_dict
+                       if mid in exp_meta_dict
+                       and rx_meta_dict[mid] == exp_meta_dict[mid]}
+
+        if len(rx_meta_dict) is not len(exp_meta_dict) \
+                or len(shared_meta) is not len(exp_meta_dict):
+            self.fail("Received PacketIn.metadata is not the expected one\n"
+                      + format_pb_msg_match(rx_packet_in_msg,
+                                            exp_packet_in_msg))
 
     def get_stream_packet(self, type_, timeout=1):
         start = time.time()
@@ -490,132 +505,6 @@ class P4RuntimeTest(BaseTest):
             replica.instance = 1
         return req, self.write_request(req)
 
-    #
-    # Convenience functions to build and send P4Runtime write requests
-    #
-    """
-    def _push_update_member(self, req, ap_name, mbr_id, a_name, params,
-                            update_type):
-        update = req.updates.add()
-        update.type = update_type
-        ap_member = update.entity.action_profile_member
-        ap_member.action_profile_id = self.get_ap_id(ap_name)
-        ap_member.member_id = mbr_id
-        self.set_action(ap_member.action, a_name, params)
-
-    def push_update_add_member(self, req, ap_name, mbr_id, a_name, params):
-        self._push_update_member(req, ap_name, mbr_id, a_name, params,
-                                 p4runtime_pb2.Update.INSERT)
-
-    def send_request_add_member(self, ap_name, mbr_id, a_name, params):
-        req = self.get_new_write_request()
-        self.push_update_add_member(req, ap_name, mbr_id, a_name, params)
-        return req, self.write_request(req)
-
-    def push_update_modify_member(self, req, ap_name, mbr_id, a_name, params):
-        self._push_update_member(req, ap_name, mbr_id, a_name, params,
-                                 p4runtime_pb2.Update.MODIFY)
-
-    def send_request_modify_member(self, ap_name, mbr_id, a_name, params):
-        req = self.get_new_write_request()
-        self.push_update_modify_member(req, ap_name, mbr_id, a_name, params)
-        return req, self.write_request(req, store=False)
-
-    def push_update_add_group(self, req, ap_name, grp_id, grp_size=32,
-                              mbr_ids=()):
-        update = req.updates.add()
-        update.type = p4runtime_pb2.Update.INSERT
-        ap_group = update.entity.action_profile_group
-        ap_group.action_profile_id = self.get_ap_id(ap_name)
-        ap_group.group_id = grp_id
-        ap_group.max_size = grp_size
-        for mbr_id in mbr_ids:
-            member = ap_group.members.add()
-            member.member_id = mbr_id
-            member.weight = 1
-
-    def send_request_add_group(self, ap_name, grp_id, grp_size=32, mbr_ids=()):
-        req = self.get_new_write_request()
-        self.push_update_add_group(req, ap_name, grp_id, grp_size, mbr_ids)
-        return req, self.write_request(req)
-
-    def push_update_set_group_membership(self, req, ap_name, grp_id,
-                                         mbr_ids=()):
-        update = req.updates.add()
-        update.type = p4runtime_pb2.Update.MODIFY
-        ap_group = update.entity.action_profile_group
-        ap_group.action_profile_id = self.get_ap_id(ap_name)
-        ap_group.group_id = grp_id
-        for mbr_id in mbr_ids:
-            member = ap_group.members.add()
-            member.member_id = mbr_id
-
-    def send_request_set_group_membership(self, ap_name, grp_id, mbr_ids=()):
-        req = self.get_new_write_request()
-        self.push_update_set_group_membership(req, ap_name, grp_id, mbr_ids)
-        return req, self.write_request(req, store=False)
-
-    #
-    # for all add_entry function, use mk == None for default entry
-    #
-    # TODO(antonin): The current P4Runtime reference implementation on p4lang
-    # does not support resetting the default entry (i.e. a DELETE operation on
-    # the default entry), which is why we make sure not to include it in the
-    # list used for autocleanup, by passing store=False to write_request calls.
-    #
-
-    def push_update_add_entry_to_action(self, req, t_name, mk, a_name, params,
-                                        priority=0):
-        update = req.updates.add()
-        update.type = p4runtime_pb2.Update.INSERT
-        table_entry = update.entity.table_entry
-        table_entry.table_id = self.get_table_id(t_name)
-        table_entry.priority = priority
-        if mk is None or len(mk) == 0:
-            table_entry.is_default_action = True
-        else:
-            self.set_match_key(table_entry, t_name, mk)
-        self.set_action_entry(table_entry, a_name, params)
-
-    def send_request_add_entry_to_action(self, t_name, mk, a_name, params,
-                                         priority=0):
-        req = self.get_new_write_request()
-        self.push_update_add_entry_to_action(req, t_name, mk, a_name, params,
-                                             priority)
-        return req, self.write_request(req, store=(mk is not None))
-
-    def push_update_add_entry_to_member(self, req, t_name, mk, mbr_id):
-        update = req.updates.add()
-        update.type = p4runtime_pb2.Update.INSERT
-        table_entry = update.entity.table_entry
-        table_entry.table_id = self.get_table_id(t_name)
-        if mk is not None:
-            self.set_match_key(table_entry, t_name, mk)
-        else:
-            table_entry.is_default_action = True
-        table_entry.action.action_profile_member_id = mbr_id
-
-    def send_request_add_entry_to_member(self, t_name, mk, mbr_id):
-        req = self.get_new_write_request()
-        self.push_update_add_entry_to_member(req, t_name, mk, mbr_id)
-        return req, self.write_request(req, store=(mk is not None))
-
-    def push_update_add_entry_to_group(self, req, t_name, mk, grp_id):
-        update = req.updates.add()
-        update.type = p4runtime_pb2.Update.INSERT
-        table_entry = update.entity.table_entry
-        table_entry.table_id = self.get_table_id(t_name)
-        if mk is not None:
-            self.set_match_key(table_entry, t_name, mk)
-        else:
-            table_entry.is_default_action = True
-        table_entry.action.action_profile_group_id = grp_id
-
-    def send_request_add_entry_to_group(self, t_name, mk, grp_id):
-        req = self.get_new_write_request()
-        self.push_update_add_entry_to_group(req, t_name, mk, grp_id)
-        return req, self.write_request(req, store=(mk is not None))
-    """
     # iterates over all requests in reverse order; if they are INSERT updates,
     # replay them as DELETE updates; this is a convenient way to clean-up a lot
     # of switch state

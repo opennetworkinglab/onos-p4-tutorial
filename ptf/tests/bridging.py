@@ -123,8 +123,19 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         for inport in mcast_ports:
             testutils.send_packet(self, inport, str(pkt))
 
-            # Pkt should be received on CPU...
-            self.verify_packet_in(exp_pkt=pkt, exp_in_port=inport)
+            # Expected P4Runtime PacketIn message.
+            exp_packet_in_msg = self.helper.build_packet_in(
+                payload=str(pkt),
+                metadata={
+                    # TODO: modify metadata names to match P4 program
+                    # ---- START SOLUTION ----
+                    "ingress_port": inport,
+                    "_pad": 0
+                    # ---- END SOLUTION ----
+                })
+
+            # Pkt should be received on CPU via PacketIn...
+            self.verify_packet_in(exp_packet_in_msg)
 
             # ...and on all ports except the ingress one.
             verify_ports = set(mcast_ports)
@@ -195,9 +206,20 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
             priority=DEFAULT_PRIORITY
         ))
 
+        # Expected P4Runtime PacketIn message.
+        exp_packet_in_msg = self.helper.build_packet_in(
+            payload=str(pkt),
+            metadata={
+                # TODO: modify metadata names to match P4 program
+                # ---- START SOLUTION ----
+                "ingress_port": self.port1,
+                "_pad": 0
+                # ---- END SOLUTION ----
+            })
+
         testutils.send_packet(self, self.port1, str(pkt))
 
-        self.verify_packet_in(exp_pkt=pkt, exp_in_port=self.port1)
+        self.verify_packet_in(exp_packet_in_msg)
         testutils.verify_packet(self, pkt, self.port2)
 
 
