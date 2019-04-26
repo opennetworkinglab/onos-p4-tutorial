@@ -14,10 +14,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import json
 import multiprocessing
 import os
-
-import json
 import random
 import re
 import socket
@@ -26,6 +25,7 @@ import threading
 import time
 import urllib2
 from contextlib import closing
+
 from mininet.log import info, warn, debug
 from mininet.node import Switch, Host
 
@@ -300,6 +300,9 @@ nodes {{
         if self.grpcPort is None:
             self.grpcPort = pickUnusedPort()
         writeToFile("/tmp/bmv2-%s-grpc-port" % self.name, self.grpcPort)
+        if self.thriftPort is None:
+            self.thriftPort = pickUnusedPort()
+        writeToFile("/tmp/bmv2-%s-thrift-port" % self.name, self.thriftPort)
 
         if self.useStratum:
             config_dir = "/tmp/bmv2-%s-stratum" % self.name
@@ -310,9 +313,6 @@ nodes {{
                 self.grpcPortInternal = pickUnusedPort()
             cmdString = self.getStratumCmdString(config_dir)
         else:
-            if self.thriftPort is None:
-                self.thriftPort = pickUnusedPort()
-            writeToFile("/tmp/bmv2-%s-thrift-port" % self.name, self.thriftPort)
             cmdString = self.getBmv2CmdString()
 
         if self.dryrun:
@@ -359,6 +359,8 @@ nodes {{
             '-cpu_port=%s' % self.cpuPort,
             '-external_hercules_urls=0.0.0.0:%d' % self.grpcPort,
             '-local_hercules_url=localhost:%d' % self.grpcPortInternal,
+            '-bmv2_thrift_port=%d' % self.thriftPort,
+            '-bmv2_log_level=%s' % self.loglevel,
             '-max_num_controllers_per_node=10',
             '-write_req_log_file=/dev/null'
         ]
