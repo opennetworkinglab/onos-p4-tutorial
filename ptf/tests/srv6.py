@@ -364,9 +364,10 @@ class Srv6EndTest(P4RuntimeTest):
 
 @group("srv6")
 class Srv6EndPspTest(P4RuntimeTest):
-    """Tests SRv6 end PSP behavior (i.e. with pop), where the switch SID is the
-    last one and the switch removes the SRv6  header beofre routing the packet
-    to  it's final destination.
+    """Tests SRv6 End with Penultimate Segment Pop (PSP) behavior, where the
+    switch SID is the penultimate in the SID list and the switch removes the
+    SRv6 header before routing the packet to it's final destination (last SID in
+    the list).
     """
 
     def runTest(self):
