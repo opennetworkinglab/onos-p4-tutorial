@@ -14,8 +14,10 @@ include activities such as:
 
 ## Tutorial VM
 
-To complete the exercises, you will need to download and run this tutorial VM:
- * **Download:** TODO add link
+To complete the exercises, you will need to download and run this tutorial VM
+(5.3 GB):
+ * <http://bit.ly/p4d2-spring19-adv-vm>
+ * <http://onlab.vicci.org/onos/p4d2-spring19-adv-vm.ova> (backup)
 
 To run the VM you can use any modern x86 virtualization system. The VM has been
 tested with VirtualBox v6.0.6. To download VirtualBox and import the VM use the
@@ -23,6 +25,14 @@ following links:
 
  * https://www.virtualbox.org/wiki/Downloads
  * https://docs.oracle.com/cd/E26217_01/E26796/html/qs-import-vm.html
+
+### Recommended system requirements
+
+The VM is configured with 4 GB of RAM and 4 CPU cores, while the disk has size
+of approx. 8 GB. These are the recommended minimum requirements to be able to
+run Ubuntu along with a Mininet network of 1-10 BMv2 devices controlled by 1
+ONOS instance. For a flawless experience, we recommend running the VM on a host
+system that has at least the double of resources.
 
 ### VM user credentials
 
@@ -43,6 +53,14 @@ content:
 
     cd ~/tutorial
     git pull origin master
+
+### Generate SSH keys
+
+ONOS uses SSH key-based authentication to access its command line interface
+(CLI). Before starting ONOS, generate public/private rsa key pair using the
+following command inside the VM:
+
+    ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' -q 
 
 ## Using an IDE to work on the exercises
 
@@ -78,7 +96,7 @@ the exercises, here's a quick reference:
 | `make onos-cli`    | Access the ONOS command line interface (CLI)           |
 | `make app-reload`  | Builds and reload the SRv6 app in ONOS                 |
 | `make topo`        | Starts the Mininet topology                            |
-| `make reset`       | Resets the tutorial environment                                                       |
+| `make reset`       | Resets the tutorial environment                        |
 
 ## Exercises
 
