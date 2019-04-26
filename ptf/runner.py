@@ -33,7 +33,7 @@ import grpc
 from p4.tmp import p4config_pb2
 from p4.v1 import p4runtime_pb2
 
-from bmv2 import Bmv2Switch
+from lib.bmv2 import Bmv2Switch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PTF runner")
@@ -49,6 +49,10 @@ def warn(msg, *args, **kwargs):
 
 def info(msg, *args, **kwargs):
     logger.info(msg, *args, **kwargs)
+
+
+def debug(msg, *args, **kwargs):
+    logger.debug(msg, *args, **kwargs)
 
 
 def check_ifaces(ifaces):
@@ -97,7 +101,7 @@ def update_config(p4info_path, bmv2_json_path, tofino_bin_path,
     channel = grpc.insecure_channel(grpc_addr)
     stub = p4runtime_pb2.P4RuntimeStub(channel)
 
-    info("Sending P4 config")
+    debug("Sending P4 config")
 
     # Send master arbitration via stream channel
     # This should go in library, to be re-used also by base_test.py.
@@ -218,7 +222,7 @@ def run_test(p4info_path, grpc_addr, device_id, cpu_port, ptfdir, port_map_path,
         test_params += ';pltfm=\'{}\''.format(platform)
     cmd.append('--test-params={}'.format(test_params))
     cmd.extend(extra_args)
-    info("Executing PTF command: {}".format(' '.join(cmd)))
+    debug("Executing PTF command: {}".format(' '.join(cmd)))
 
     try:
         # we want the ptf output to be sent to stdout

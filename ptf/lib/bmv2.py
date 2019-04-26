@@ -103,6 +103,7 @@ class Bmv2Switch:
             '--initial_pipeline=' + INITIAL_PIPELINE,
             '--cpu_port=%s' % self.cpu_port,
             '--external-hercules-urls=0.0.0.0:%s' % self.grpc_port,
+            '--bmv2_log_level=trace',
         ]
         for port, intf in port_map.items():
             args.append('%d@%s' % (port, intf))
@@ -145,7 +146,7 @@ class Bmv2Switch:
             cmdString = self.get_cmd(port_map)
             ld_path = ""
 
-        logger.info("Starting... %s" % cmdString)
+        logger.debug("Starting... %s" % cmdString)
 
         # Start the switch
         try:
@@ -177,7 +178,7 @@ class Bmv2Switch:
                 raise Exception("Switch did not start before timeout")
 
     def kill(self):
-        logger.info("Killing...")
+        logger.debug("Killing...")
         if self.bmv2popen is not None:
             self.bmv2popen.kill()
             self.bmv2popen = None

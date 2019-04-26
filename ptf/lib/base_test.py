@@ -20,19 +20,16 @@
 #
 
 import Queue
-import struct
 import sys
 import threading
 import time
 from StringIO import StringIO
-from collections import Counter
 from functools import wraps, partial
 from unittest import SkipTest
 
 import google.protobuf.text_format
 import grpc
 import ptf
-import ptf.testutils as testutils
 import scapy.packet
 import scapy.utils
 from google.rpc import status_pb2, code_pb2
@@ -40,8 +37,53 @@ from ipaddress import ip_address
 from p4.config.v1 import p4info_pb2
 from p4.v1 import p4runtime_pb2
 from ptf import config
+from ptf import testutils as testutils
 from ptf.base_tests import BaseTest
 from ptf.dataplane import match_exp_pkt
+from ptf.packet import IPv6
+from scapy.layers.inet6 import *
+from scapy.layers.l2 import Ether
+from scapy.pton_ntop import inet_pton, inet_ntop
+from scapy.utils6 import in6_getnsma, in6_getnsmac
+
+from lib.helper import P4InfoHelper
+
+DEFAULT_PRIORITY = 10
+
+IPV6_MCAST_MAC_1 = "33:33:00:00:00:01"
+
+SWITCH1_MAC = "00:00:00:00:aa:01"
+SWITCH2_MAC = "00:00:00:00:aa:02"
+SWITCH3_MAC = "00:00:00:00:aa:03"
+HOST1_MAC = "00:00:00:00:00:01"
+HOST2_MAC = "00:00:00:00:00:02"
+
+MAC_BROADCAST = "FF:FF:FF:FF:FF:FF"
+MAC_FULL_MASK = "FF:FF:FF:FF:FF:FF"
+MAC_MULTICAST = "33:33:00:00:00:00"
+MAC_MULTICAST_MASK = "FF:FF:00:00:00:00"
+
+SWITCH1_IPV6 = "2001:0:1::1"
+SWITCH2_IPV6 = "2001:0:2::1"
+SWITCH3_IPV6 = "2001:0:3::1"
+HOST1_IPV6 = "2001:0000:85a3::8a2e:370:1111"
+HOST2_IPV6 = "2001:0000:85a3::8a2e:370:2222"
+IPV6_MASK_ALL = "FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF"
+
+ARP_ETH_TYPE = 0x0806
+IPV6_ETH_TYPE = 0x86DD
+
+ICMPV6_IP_PROTO = 58
+NS_ICMPV6_TYPE = 135
+NA_ICMPV6_TYPE = 136
+
+# FIXME: this should be removed, use generic packet in test
+PACKET_IN_INGRESS_PORT_META_ID = 1
+
+
+def print_inline(text):
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
 # See https://gist.github.com/carymrobbins/8940382
@@ -105,9 +147,52 @@ def format_pkt_match(received_pkt, expected_pkt):
         sys.stdout = stdout_save  # Restore the original stdout.
 
 
-# Used to indicate that the gRPC error Status object returned by the server has
-# an incorrect format.
+def pkt_mac_swap(pkt):
+    orig_dst = pkt[Ether].dst
+    pkt[Ether].dst = pkt[Ether].src
+    pkt[Ether].src = orig_dst
+    return pkt
+
+
+def pkt_route(pkt, mac_dst):
+    pkt[Ether].src = pkt[Ether].dst
+    pkt[Ether].dst = mac_dst
+    return pkt
+
+
+def pkt_decrement_ttl(pkt):
+    if IP in pkt:
+        pkt[IP].ttl -= 1
+    elif IPv6 in pkt:
+        pkt[IPv6].hlim -= 1
+    return pkt
+
+
+def genNdpNsPkt(target_ip, src_mac=HOST1_MAC, src_ip=HOST1_IPV6):
+    nsma = in6_getnsma(inet_pton(socket.AF_INET6, target_ip))
+    d = inet_ntop(socket.AF_INET6, nsma)
+    dm = in6_getnsmac(nsma)
+    p = Ether(dst=dm) / IPv6(dst=d, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NS(tgt=target_ip)
+    p /= ICMPv6NDOptSrcLLAddr(lladdr=src_mac)
+    return p
+
+
+def genNdpNaPkt(target_ip, target_mac,
+                src_mac=SWITCH1_MAC, dst_mac=IPV6_MCAST_MAC_1,
+                src_ip=SWITCH1_IPV6, dst_ip=HOST1_IPV6):
+    p = Ether(src=src_mac, dst=dst_mac)
+    p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
+    p /= ICMPv6ND_NA(tgt=target_ip)
+    p /= ICMPv6NDOptDstLLAddr(lladdr=target_mac)
+    return p
+
+
 class P4RuntimeErrorFormatException(Exception):
+    """Used to indicate that the gRPC error Status object returned by the server has
+    an incorrect format.
+    """
+
     def __init__(self, message):
         super(P4RuntimeErrorFormatException, self).__init__(message)
 
@@ -198,6 +283,10 @@ class P4RuntimeTest(BaseTest):
         for device, port, ifname in config["interfaces"]:
             self._swports.append(port)
 
+        self.port1 = self.swports(1)
+        self.port2 = self.swports(2)
+        self.port3 = self.swports(3)
+
         grpc_addr = testutils.test_param_get("grpcaddr")
         if grpc_addr is None:
             grpc_addr = 'localhost:50051'
@@ -224,7 +313,7 @@ class P4RuntimeTest(BaseTest):
         with open(proto_txt_path, "rb") as fin:
             google.protobuf.text_format.Merge(fin.read(), self.p4info)
 
-        self.import_p4info_names()
+        self.helper = P4InfoHelper(proto_txt_path)
 
         # used to store write requests sent to the P4Runtime server, useful for
         # autocleanup of tests (see definition of autocleanup decorator below)
@@ -232,25 +321,6 @@ class P4RuntimeTest(BaseTest):
 
         self.election_id = 1
         self.set_up_stream()
-
-    # In order to make writing tests easier, we accept any suffix that uniquely
-    # identifies the object among p4info objects of the same type.
-    def import_p4info_names(self):
-        self.p4info_obj_map = {}
-        suffix_count = Counter()
-        for p4_obj_type in ["tables", "action_profiles", "actions", "counters",
-                            "direct_counters"]:
-            for obj in getattr(self.p4info, p4_obj_type):
-                pre = obj.preamble
-                suffix = None
-                for s in reversed(pre.name.split(".")):
-                    suffix = s if suffix is None else s + "." + suffix
-                    key = (p4_obj_type, suffix)
-                    self.p4info_obj_map[key] = obj
-                    suffix_count[key] += 1
-        for key, c in suffix_count.items():
-            if c > 1:
-                del self.p4info_obj_map[key]
 
     def set_up_stream(self):
         self.stream_out_q = Queue.Queue()
@@ -302,15 +372,22 @@ class P4RuntimeTest(BaseTest):
         else:
             return msg.packet
 
-    def verify_packet_in(self, exp_pkt, exp_in_port, timeout=2):
+    def verify_packet_in(self, exp_pkt, exp_in_port, inport_meta_id=1,
+                         timeout=2):
         pkt_in_msg = self.get_packet_in(timeout=timeout)
         in_port_ = stringify(exp_in_port, 2)
-        rx_in_port_ = pkt_in_msg.metadata[0].value
+        rx_in_port_ = None
+        for meta in pkt_in_msg.metadata:
+            if meta.metadata_id == inport_meta_id:
+                rx_in_port_ = meta.value
+                break
+        if rx_in_port_ is None:
+            self.fail("No such metadata with ID %d in PacketIn message: %s"
+                      % (inport_meta_id, pkt_in_msg))
         if in_port_ != rx_in_port_:
-            rx_inport = struct.unpack("!h", rx_in_port_)[0]
-            self.fail(
-                "Wrong packet-in ingress port, expected {} but received was {}"
-                    .format(exp_in_port, rx_inport))
+            rx_inport = struct.unpack("!h", rx_in_port_)[inport_meta_idx]
+            self.fail("Wrong PacketIn ingress port, expected {} but received was {}"
+                .format(inport_meta_idx, exp_in_port, rx_inport))
         rx_pkt = Ether(pkt_in_msg.payload)
         if not match_exp_pkt(exp_pkt, rx_pkt):
             self.fail(
@@ -342,144 +419,6 @@ class P4RuntimeTest(BaseTest):
             self.fail("Index {} is out-of-bound of port map".format(idx))
         return self._swports[idx]
 
-    def get_obj(self, p4_obj_type, p4_name):
-        key = (p4_obj_type, p4_name)
-        obj = self.p4info_obj_map.get(key, None)
-        if obj is None:
-            raise Exception(
-                "Unable to find %s '%s' in p4info" % (p4_obj_type, p4_name))
-        return obj
-
-    def get_obj_id(self, p4_obj_type, p4_name):
-        obj = self.get_obj(p4_obj_type, p4_name)
-        return obj.preamble.id
-
-    def get_param_id(self, action_name, param_name):
-        a = self.get_obj("actions", action_name)
-        for p in a.params:
-            if p.name == param_name:
-                return p.id
-        raise Exception(
-            "Param '%s' not found in action '%s'" % (param_name, action_name))
-
-    def get_mf_id(self, table_name, mf_name):
-        t = self.get_obj("tables", table_name)
-        if t is None:
-            return None
-        for mf in t.match_fields:
-            if mf.name == mf_name:
-                return mf.id
-        raise Exception(
-            "Match field '%s' not found in table '%s'" % (mf_name, table_name))
-
-    # These are attempts at convenience functions aimed at making writing
-    # P4Runtime PTF tests easier.
-
-    class MF(object):
-        def __init__(self, mf_name):
-            self.name = mf_name
-
-    class Exact(MF):
-        def __init__(self, mf_name, v):
-            super(P4RuntimeTest.Exact, self).__init__(mf_name)
-            self.v = v
-
-        def add_to(self, mf_id, mk):
-            mf = mk.add()
-            mf.field_id = mf_id
-            mf.exact.value = self.v
-
-    class Lpm(MF):
-        def __init__(self, mf_name, v, pLen):
-            super(P4RuntimeTest.Lpm, self).__init__(mf_name)
-            self.v = v
-            self.pLen = pLen
-
-        def add_to(self, mf_id, mk):
-            # P4Runtime mandates that the match field should be omitted for
-            # "don't care" LPM matches (i.e. when prefix length is zero)
-            if self.pLen == 0:
-                return
-            mf = mk.add()
-            mf.field_id = mf_id
-            mf.lpm.prefix_len = self.pLen
-            mf.lpm.value = ''
-
-            # P4Runtime now has strict rules regarding ternary matches: in the
-            # case of LPM, trailing bits in the value (after prefix) must be set
-            # to 0.
-            first_byte_masked = self.pLen / 8
-            for i in xrange(first_byte_masked):
-                mf.lpm.value += self.v[i]
-            if first_byte_masked == len(self.v):
-                return
-            r = self.pLen % 8
-            mf.lpm.value += chr(
-                ord(self.v[first_byte_masked]) & (0xff << (8 - r)))
-            for i in range(first_byte_masked + 1, len(self.v)):
-                mf.lpm.value += '\x00'
-
-    class Ternary(MF):
-        def __init__(self, mf_name, v, mask):
-            super(P4RuntimeTest.Ternary, self).__init__(mf_name)
-            self.v = v
-            self.mask = mask
-
-        def add_to(self, mf_id, mk):
-            # P4Runtime mandates that the match field should be omitted for
-            # "don't care" ternary matches (i.e. when mask is zero)
-            if all(c == '\x00' for c in self.mask):
-                return
-            mf = mk.add()
-            mf.field_id = mf_id
-            assert (len(self.mask) == len(self.v))
-            mf.ternary.mask = self.mask
-            mf.ternary.value = ''
-            # P4Runtime now has strict rules regarding ternary matches: in the
-            # case of Ternary, "don't-care" bits in the value must be set to 0
-            for i in xrange(len(self.mask)):
-                mf.ternary.value += chr(ord(self.v[i]) & ord(self.mask[i]))
-
-    class Range(MF):
-        def __init__(self, mf_name, low, high):
-            super(P4RuntimeTest.Range, self).__init__(mf_name)
-            self.low = low
-            self.high = high
-
-        def add_to(self, mf_id, mk):
-            # P4Runtime mandates that the match field should be omitted for
-            # "don't care" range matches (i.e. when all possible values are
-            # included in the range)
-            # TODO(antonin): negative values?
-            low_is_zero = all(c == '\x00' for c in self.low)
-            high_is_max = all(c == '\xff' for c in self.high)
-            if low_is_zero and high_is_max:
-                return
-            mf = mk.add()
-            mf.field_id = mf_id
-            assert (len(self.high) == len(self.low))
-            mf.range.low = self.low
-            mf.range.high = self.high
-
-    # Sets the match key for a p4::TableEntry object. mk needs to be an iterable
-    # object of MF instances
-    def set_match_key(self, table_entry, t_name, mk):
-        for mf in mk:
-            mf_id = self.get_mf_id(t_name, mf.name)
-            mf.add_to(mf_id, table_entry.match)
-
-    def set_action(self, action, a_name, params):
-        action.action_id = self.get_action_id(a_name)
-        for p_name, v in params:
-            param = action.params.add()
-            param.param_id = self.get_param_id(a_name, p_name)
-            param.value = v
-
-    # Sets the action & action data for a p4::TableEntry object. params needs to
-    # be an iterable object of 2-tuples (<param_name>, <value>).
-    def set_action_entry(self, table_entry, a_name, params):
-        self.set_action(table_entry.action.action, a_name, params)
-
     def _write(self, req):
         try:
             return self.stub.Write(req)
@@ -494,6 +433,25 @@ class P4RuntimeTest(BaseTest):
             self.reqs.append(req)
         return rep
 
+    def insert(self, entity):
+        if isinstance(entity, list) or isinstance(entity, tuple):
+            for e in entity:
+                self.insert(e)
+            return
+        req = self.get_new_write_request()
+        update = req.updates.add()
+        update.type = p4runtime_pb2.Update.INSERT
+        if isinstance(entity, p4runtime_pb2.TableEntry):
+            msg_entity = update.entity.table_entry
+        elif isinstance(entity, p4runtime_pb2.ActionProfileGroup):
+            msg_entity = update.entity.action_profile_group
+        elif isinstance(entity, p4runtime_pb2.ActionProfileMember):
+            msg_entity = update.entity.action_profile_member
+        else:
+            self.fail("Entity %s not supported" % entity.__name__)
+        msg_entity.CopyFrom(entity)
+        self.write_request(req)
+
     def get_new_write_request(self):
         req = p4runtime_pb2.WriteRequest()
         req.device_id = self.device_id
@@ -502,10 +460,39 @@ class P4RuntimeTest(BaseTest):
         election_id.low = self.election_id
         return req
 
+    def insert_pre_multicast_group(self, group_id, ports):
+        req = self.get_new_write_request()
+        update = req.updates.add()
+        update.type = p4runtime_pb2.Update.INSERT
+        pre_entry = update.entity.packet_replication_engine_entry
+        mg_entry = pre_entry.multicast_group_entry
+        mg_entry.multicast_group_id = group_id
+        for port in ports:
+            replica = mg_entry.replicas.add()
+            replica.egress_port = port
+            replica.instance = 0
+        return req, self.write_request(req)
+
+    def insert_pre_clone_session(self, session_id, ports, cos=0,
+                                 packet_length_bytes=0):
+        req = self.get_new_write_request()
+        update = req.updates.add()
+        update.type = p4runtime_pb2.Update.INSERT
+        pre_entry = update.entity.packet_replication_engine_entry
+        clone_entry = pre_entry.clone_session_entry
+        clone_entry.session_id = session_id
+        clone_entry.class_of_service = cos
+        clone_entry.packet_length_bytes = packet_length_bytes
+        for port in ports:
+            replica = clone_entry.replicas.add()
+            replica.egress_port = port
+            replica.instance = 1
+        return req, self.write_request(req)
+
     #
     # Convenience functions to build and send P4Runtime write requests
     #
-
+    """
     def _push_update_member(self, req, ap_name, mbr_id, a_name, params,
                             update_type):
         update = req.updates.add()
@@ -627,7 +614,7 @@ class P4RuntimeTest(BaseTest):
         req = self.get_new_write_request()
         self.push_update_add_entry_to_group(req, t_name, mk, grp_id)
         return req, self.write_request(req, store=(mk is not None))
-
+    """
     # iterates over all requests in reverse order; if they are INSERT updates,
     # replay them as DELETE updates; this is a convenient way to clean-up a lot
     # of switch state
@@ -642,23 +629,6 @@ class P4RuntimeTest(BaseTest):
             update.type = p4runtime_pb2.Update.DELETE
             new_req.updates.add().CopyFrom(update)
         self._write(new_req)
-
-
-# Add p4info object and object id "getters" for each object type; these are just
-# wrappers around P4RuntimeTest.get_obj and P4RuntimeTest.get_obj_id.
-# For example: get_table(x) and get_table_id(x) respectively call
-# get_obj("tables", x) and get_obj_id("tables", x)
-for obj_type, nickname in [("tables", "table"),
-                           ("action_profiles", "ap"),
-                           ("actions", "action"),
-                           ("counters", "counter"),
-                           ("direct_counters", "direct_counter")]:
-    name = "_".join(["get", nickname])
-    setattr(P4RuntimeTest, name, partialmethod(
-        P4RuntimeTest.get_obj, obj_type))
-    name = "_".join(["get", nickname, "id"])
-    setattr(P4RuntimeTest, name, partialmethod(
-        P4RuntimeTest.get_obj_id, obj_type))
 
 
 # this decorator can be used on the runTest method of P4Runtime PTF tests
