@@ -3,7 +3,8 @@
 In this exercise, you will be adding some tables that will perform IPv6
 routing of packets between the switches in your topology.
 
-### Step 1: adding tables for IPv6 routing
+Adding tables for IPv6 routing
+----
 
 The first step will be to add the new tables to `main.p4`.
 
@@ -58,9 +59,8 @@ Make sure to address any compiler errors before continuing.
 
 At this point, our P4 pipeline should be ready for testing.
 
+Testing the pipeline with Packet Test Framework (PTF)
 ----
-
-### Step 2: testing the pipeline with Packet Test Framework (PTF)
 
 In this exercise,
 you will be add test codes to [routing.py](ptf/tests/routing.py) to verify the routing
@@ -69,9 +69,10 @@ the behavior of the pipeline.
 In the `IPv6RoutingTest` we test three different types of a packet: TCPv6, UDPv6, and ICMPv6
 
 Those packets includes sample Ethernet, IPv6 headers and payload.
-The test program will send packets to port one(1) of test switch, and we expect the switch routes the packet to the next hop, which performs actions below:
+The test program will send packets to first port of test switch,
+and we expect the switch routes the packet to the next hop, which performs actions below:
 
- 1. Check if destination mac is the router mac address(my station mac)
+ 1. Check if destination mac is the router mac(my station mac)
  2. Modify the mac address
     - source mac becomes to router mac(my station mac)
     - destination mac becomes to next hop mac address
@@ -80,7 +81,8 @@ The test program will send packets to port one(1) of test switch, and we expect 
 
 Now we can try the PTF test for routing without any modification.
 
-To run the test for routing, enter `ptf` directory and use following command:
+To run the test for routing, enter the `ptf` directory and use following command:
+
 ```bash
 make routing
 ```
@@ -102,37 +104,17 @@ We need to add some table entries and groups to make it works.
 
 The first step is to program the table which checks the destination mac address.
 
-You can create and insert a table entry by using the following code:
-
-```python
-# Create a table entry
-table_entry = self.helper.build_table_entry(
-    table_name="<Table name>",
-    match_fields={
-        "<Match field1>": <Value to be matched>,
-        "<Match field2>": <Value to be matched>,
-        ....
-    },
-    action_name="<The action name>",
-    action_params={
-        "<Param1>": <Param1 Val>,
-        "<Param2>": <Param2 Val>,
-        ....
-    }
-)
-# Insert table entry to switch
-self.insert(table_entry)
-```
-
-**Note:** The `action_params` is optional.
+To build the table entry, use `self.helper.build_table_entry` method and use `self.insert()`
+to insert the table entry to the test device.
 
  - Hint: we can match destination mac of the packet directly in the table entry
  - Hint2: we can get destination mac of the packet with `pkt[Ether].dst`
 
-After adding this code, the switch should be able to process the packet with
-destination mac address which equals to the switch mac.
-The test won't work at this time. However, we can check trace log from BMv2 to see
-if the packet hits the table.
+After adding the code, the device should be able to process the packet with
+destination mac address which equals to the router mac.
+
+The test won't pass at this time. However, we can check trace log from BMv2 to see
+how the packet been processed by the pipeline.
 
 You can find trace log of Bmv2 switch here: `/tmp/bmv2-ptf.log`
 
@@ -198,7 +180,7 @@ Action entry is <Action name> - <Action parameter>
 
 The last thing we miss is the table which handles the packet with next hop destination mac.
 
-We expected to receive the packet from second(2) port of the switch.
+We expected to receive the packet from second port of the switch.
 This can be done by using the bridging table, see [EXERCISE-2.md](EXERCISE-2.md)
 
 We should be able to see the following message if the test runs correctly:
@@ -218,15 +200,16 @@ Some troubleshooting tips:
  - Log for PTF is located at `tutorial/ptf/ptf.log`
  - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
 
+Step 3: Developing the ONOS App
 ----
-
-## Step 3: building the ONOS App
 
 The last part of the exercise is to update the starter code for the routing exercise,
 located here: `tutorial/app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`.
 
 The first step is to modify the `setUpMyStationTable` method to insert a rule that
 matches the router's Ethernet address and insert it into your my station table.
+
+
 
 FIXME WIP
 
