@@ -200,18 +200,11 @@ Some troubleshooting tips:
  - Log for PTF is located at `tutorial/ptf/ptf.log`
  - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
 
-Step 3: Developing the ONOS App
+Developing the ONOS routing app
 ----
 
 The last part of the exercise is to update the starter code for the routing exercise,
 located here: `tutorial/app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`.
-
-The first step is to modify the `setUpMyStationTable` method to insert a rule that
-matches the router's Ethernet address and insert it into your my station table.
-
-
-
-FIXME WIP
 
 This session will focus on adding support for routing of IPv6 packets between
 different ToR switches.
@@ -221,3 +214,17 @@ ONOS app to handle IPv6 NDP Router Advertisement and Solicitation
 messages, as well as programming of P4 table entries and action profile
 groups to route packets across the fabric, using ECMP to distribute traffic
 between multiple spines.
+
+**The first step** is to modify the `setUpMyStationTable` method to insert a rule that
+matches the router's Ethernet address and insert it into your my station table.
+
+**The second step** is to complete the `createNextHopGroup` method. This method creates an ONOS group with 
+given group ID and collection of next hop mac address.
+
+You goal is to create actions for this group to set the next hop address to the packet.
+
+**The third step** is to modify the `createRoutingRule` method to insert the routing rule with given IPv6 prefix
+and group ID.
+
+**The last step** is to add code to the `createNextHopRule` method which creates L2 rules for next hop. 
+
