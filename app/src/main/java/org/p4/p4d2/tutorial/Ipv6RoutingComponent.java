@@ -16,6 +16,7 @@
 
 package org.p4.p4d2.tutorial;
 
+import com.google.common.collect.Lists;
 import org.onlab.packet.Ip6Address;
 import org.onlab.packet.Ip6Prefix;
 import org.onlab.packet.IpAddress;
@@ -119,6 +120,13 @@ public class Ipv6RoutingComponent {
 
     private ApplicationId appId;
 
+    //--------------------------------------------------------------------------
+    // COMPONENT ACTIVATION.
+    //
+    // When loading/unloading the app the Karaf runtime environment will call
+    // activate()/deactivate().
+    //--------------------------------------------------------------------------
+
     @Activate
     protected void activate() {
         appId = mainComponent.getAppId();
@@ -167,21 +175,146 @@ public class Ipv6RoutingComponent {
     private void setUpMyStationTable(DeviceId deviceId) {
         MacAddress myStationMac = getMyStationMac(deviceId);
 
-        PiCriterion match = PiCriterion.builder()
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                            myStationMac.toBytes())
+        // HINT: this method create a flow rule for *l2_my_station* table
+        //       which matches the *ethernet destination*
+        //       and there is only one action called *NoAction*
+        String tableId = "FabricIngress.l2_my_station";
+
+        // TODO: create a match which matches my station mac address.
+        // HINT: uses *.matchExact* to match exact byte value of dst mac.
+        // ---- START SOLUTION ----
+        PiCriterion piMatch = PiCriterion.builder()
+                .matchExact(
+                        PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                        myStationMac.toBytes())
                 .build();
-        PiTableAction action = PiAction.builder()
+
+        // Creates an action which do *NoAction* when hit.
+        PiTableAction piTableAction = PiAction.builder()
                 .withId(PiActionId.of("NoAction"))
                 .build();
+        // ---- END SOLUTION ----
 
         FlowRule myStationRule = Utils.forgeFlowRule(
                 deviceId, appId,
-                "FabricIngress.l2_my_station",
-                match, action);
+                tableId,
+                piMatch, piTableAction);
 
         flowRuleService.applyFlowRules(myStationRule);
     }
+
+    /**
+     * Creates a next hope flow rule in the L2 table, matching on the given
+     * destination MAC and with the given output port.
+     *
+     * @param deviceId the device
+     * @param nexthopMac   the next hop (destination) mac
+     * @param outPort  the output port
+     */
+    private FlowRule createNextHopRule(DeviceId deviceId, MacAddress nexthopMac,
+                                       PortNumber outPort) {
+        // HINT: this method create a flow for *l2_exact_table* table
+        //       which matches the *ethernet destination* and sets the output
+        //       port by invoking *set_output_port* action.
+        String tableId = "FabricIngress.l2_exact_table";
+
+        // FIXME TODO: create a match which matches destination mac to next hop
+        PiCriterion match = PiCriterion.builder()
+                // TODO: add code here
+                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                            nexthopMac.toBytes())
+                .build();
+
+        // TODO: create an action which sets the output port
+        // HINT: use *withId* method to set action id and use *withParameter*
+        //       to set action parameter
+        PiAction action = PiAction.builder()
+                // TODO: add code here
+                .withId(PiActionId.of("FabricIngress.set_output_port"))
+                .withParameter(new PiActionParam(
+                        PiActionParamId.of("port_num"), outPort.toLong()))
+                .build();
+
+        return Utils.forgeFlowRule(
+                deviceId, appId,
+                tableId,
+                match, action);
+    }
+
+    /**
+     * Creates an ONOS SELECT group to provide ECMP forwarding for the given
+     * collection of next hop MAC addresses. ONOS SELECT groups are equivalent
+     * to P4Runtime action selector groups.
+     *
+     * @param nextHopMacs the collection of mac addresses of next hops
+     * @param deviceId    the device where the group will be installed
+     * @return a SELECT group
+     */
+    private GroupDescription createNextHopGroup(
+            int groupId, Collection<MacAddress> nextHopMacs, DeviceId deviceId) {
+
+        // TODO: Fill Ids.
+        // HINT: this method creates an group for *l3_table* and uses
+        //       *ecmp_selector* action profile group to do ECMP.
+        String tableId = "FabricIngress.l3_table";
+        String actionProfileId = "FabricIngress.ecmp_selector";
+
+        final List<PiAction> actions = Lists.newArrayList();
+        for (MacAddress nextHopMac : nextHopMacs) {
+            // TODO: Create a list of actions for each next hop.
+            // HINT: add action and action parameter
+            // ---- START SOLUTION ----
+            PiAction action = PiAction.builder()
+                    // TODO: add code here
+                    .withId(PiActionId.of("FabricIngress.set_l2_next_hop"))
+                    .withParameter(new PiActionParam(
+                            PiActionParamId.of("dmac"),
+                            nextHopMac.toBytes()))
+                    .build();
+            // ---- END SOLUTION ----
+            actions.add(action);
+        }
+
+        return Utils.forgeSelectGroup(
+                deviceId, tableId, actionProfileId, groupId, actions, appId);
+    }
+
+    /**
+     * Creates a routing flow rule that matches on the given IPv6 prefix and
+     * executes the given group ID.
+     *
+     * @param deviceId  the device where flow rule will be installed
+     * @param ip6Prefix the IPv6 prefix
+     * @param groupId   the group ID
+     * @return a flow rule
+     */
+    private FlowRule createRoutingRule(
+            DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
+
+        // TODO: Fill Ids.
+        // HINT: the routing rule matches *destination IP* and forward the
+        //       packet to the next hop group
+        String tableId = "FabricIngress.l3_table";
+
+        // TODO: Cerate a match for IPv6 address with LPM.
+        // HINT: use *matchLpm* to match LPM
+        // ---- START SOLUTION ----
+        PiCriterion match = PiCriterion.builder()
+                // TODO: add code here
+                .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
+                        ip6Prefix.address().toOctets(),
+                        ip6Prefix.prefixLength())
+                .build();
+        // ---- END SOLUTION ----
+
+        // FIXME make TODO
+        // Action: set action profile group ID
+        PiTableAction action = PiActionProfileGroupId.of(groupId);
+
+        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
+    }
+
+    // ---------- end methods to work on ---------------- FIXME
 
     /**
      * Set up nexthop rules of a device.
@@ -189,64 +322,15 @@ public class Ipv6RoutingComponent {
      * @param deviceId the device ID
      */
     private void setUpNextHopRules(DeviceId deviceId) {
-        deviceService.getAvailableDevices().forEach(dstDevice -> {
-            DeviceId nextHop = dstDevice.id();
-            // Find any link from this device to the next hop, if any.
-            Set<Link> egressLinks = linkService.getDeviceEgressLinks(deviceId);
-            Link linkToNextHop = egressLinks.stream()
-                    .filter(link -> link.dst().deviceId().equals(nextHop))
-                    .findAny()
-                    .orElse(null);
-
-            if (linkToNextHop == null) {
-                // Maybe we are still waiting to discover that link?
-                log.debug("No link from {} to next hop {}", deviceId, nextHop);
-                return;
-            }
+        Set<Link> egressLinks = linkService.getDeviceEgressLinks(deviceId);
+        for (Link link : egressLinks) {
+            DeviceId nextHopDevice = link.dst().deviceId();
             // Get port of this device connecting to next hop.
-            PortNumber outPort = linkToNextHop.src().port();
-
-            MacAddress nextHopMac = getMyStationMac(nextHop);
-            insertNextHopRule(deviceId, nextHopMac, outPort);
-        });
-    }
-
-    /**
-     * Insert a next hope flow rule in the L2 table, matching on the given
-     * destination MAC and with the given output port.
-     *
-     * @param deviceId the device
-     * @param dstMac   the next hop (destination) mac
-     * @param outPort  the output port
-     */
-    private void insertNextHopRule(DeviceId deviceId, MacAddress dstMac,
-                                   PortNumber outPort) {
-
-        // Match: MAC address of next hop.
-        PiCriterion match = PiCriterion.builder()
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                            dstMac.toBytes())
-                .build();
-
-        // Action: set_output_port
-        PiActionParam param = new PiActionParam(PiActionParamId.of("port_num"),
-                                                outPort.toLong());
-        PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_output_port"))
-                .withParameter(param)
-                .build();
-
-        final FlowRule rule = Utils.forgeFlowRule(
-                deviceId, appId,
-                "FabricIngress.l2_exact_table",
-                match, action);
-
-        flowRuleService.applyFlowRules(rule);
-    }
-
-    private void setUpHostRulesOnDevice(DeviceId deviceId) {
-        hostService.getConnectedHosts(deviceId)
-                .forEach(host -> setUpHostRules(deviceId, host));
+            PortNumber outPort = link.src().port();
+            MacAddress nextHopMac = getMyStationMac(nextHopDevice);
+            final FlowRule nextHopRule = createNextHopRule(deviceId, nextHopMac, outPort);
+            flowRuleService.applyFlowRules(nextHopRule);
+        }
     }
 
     /**
@@ -261,8 +345,7 @@ public class Ipv6RoutingComponent {
 
         // Get all IPv6 addresses associated to this host. In this tutorial we
         // use hosts with onle 1 IPv6 address.
-        Collection<Ip6Address> hostIpv6Addresses = host.ipAddresses()
-                .stream()
+        Collection<Ip6Address> hostIpv6Addresses = host.ipAddresses().stream()
                 .filter(IpAddress::isIp6)
                 .map(IpAddress::getIp6Address)
                 .collect(Collectors.toSet());
@@ -273,7 +356,7 @@ public class Ipv6RoutingComponent {
             return;
         } else {
             log.info("Setting up routes on {} for host {} [{}]",
-                     deviceId, host.id(), hostIpv6Addresses);
+                    deviceId, host.id(), hostIpv6Addresses);
         }
 
         // Create a group with only one member.
@@ -325,10 +408,9 @@ public class Ipv6RoutingComponent {
             MacAddress leafMac = getMyStationMac(leafId);
             final Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
 
-            // FIXME: This should be added in exercise 3
+            // Add direct routing rule for spine to leaf
             Ip6Address leafSid = getDeviceSid(leafId);
             subnetsToRoute.add(Ip6Prefix.valueOf(leafSid, 128));
-            // ---- end exercise 3 addition
 
             if (subnetsToRoute.isEmpty()) {
                 // No subnets on this leaf switch. Next device.
@@ -384,7 +466,9 @@ public class Ipv6RoutingComponent {
                 .map(subnet -> createRoutingRule(leafId, subnet, groupId))
                 .collect(Collectors.toList());
 
-        // FIXME exercise 3 add spine sid rules
+        insertInOrder(ecmpGroup, flowRules);
+
+        // Add direct routing rule for leaf to spine
         stream(deviceService.getDevices())
                 .map(Device::id)
                 .filter(this::isSpine)
@@ -399,69 +483,104 @@ public class Ipv6RoutingComponent {
                                     spineGroupId)));
 
                 });
-        // --- end exercise 3
-        insertInOrder(ecmpGroup, flowRules);
+    }
+
+    //--------------------------------------------------------------------------
+    // EVENT LISTENERS
+    //
+    // Events are processed only if isRelevant() returns true.
+    //--------------------------------------------------------------------------
+
+    /**
+     * Listener of host events which triggers configuration of routing rules on
+     * the device where the host is attached.
+     */
+    class InternalHostListener implements HostListener {
+        @Override
+        public void event(HostEvent event) {
+            Host host = event.subject();
+            DeviceId deviceId = host.location().deviceId();
+            mainComponent.getExecutorService().execute(() -> {
+                log.info("{} event! host={}, deviceId={}, port={}",
+                        event.type(), host.id(), deviceId, host.location().port());
+                setUpHostRules(deviceId, host);
+            });
+        }
+
+        @Override
+        public boolean isRelevant(HostEvent event) {
+            switch (event.type()) {
+                case HOST_ADDED:
+                    break;
+                case HOST_REMOVED:
+                case HOST_UPDATED:
+                case HOST_MOVED:
+                default:
+                    // Ignore other events.
+                    // Food for thoughts:
+                    // how to support host moved/removed events?
+                    return false;
+            }
+            // Process host event only if this controller instance is the master
+            // for the device where this host is attached.
+            final Host host = event.subject();
+            final DeviceId deviceId = host.location().deviceId();
+            return mastershipService.isLocalMaster(deviceId);
+        }
     }
 
     /**
-     * Creates an ONOS SELECT group to provide ECMP forwarding for the given
-     * collection of next hop MAC addresses. ONOS SELECT groups are equivalent
-     * to P4Runtime action selector groups.
-     *
-     * @param nextHopMacs the collection of mac addresses of next hops
-     * @param deviceId    the device where the group will be installed
-     * @return a SELECT group
+     * Listener of link events.
      */
-    private GroupDescription createNextHopGroup(
-            int groupId, Collection<MacAddress> nextHopMacs, DeviceId deviceId) {
+    class InternalLinkListener implements LinkListener {
 
-        // From P4Info.
-        String tableId = "FabricIngress.l3_table";
-        String actionProfileId = "FabricIngress.ecmp_selector";
-        String setNextHopAction = "FabricIngress.set_l2_next_hop";
-        String dmacParam = "dmac";
+        @Override
+        public void event(LinkEvent event) {
+            DeviceId srcDev = event.subject().src().deviceId();
+            DeviceId dstDev = event.subject().dst().deviceId();
 
-        // Create a list of actions for each next hop.
-        final List<PiAction> actions = nextHopMacs.stream()
-                .map(nextHopMac -> PiAction.builder()
-                        .withId(PiActionId.of(setNextHopAction))
-                        .withParameter(new PiActionParam(
-                                PiActionParamId.of(dmacParam),
-                                nextHopMac.toBytes()))
-                        .build())
-                .collect(Collectors.toList());
+            if (mastershipService.isLocalMaster(srcDev)) {
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
+                            event.type(), srcDev, srcDev, dstDev);
+                    setUpRoute(srcDev);
+                    setUpNextHopRules(srcDev);
+                });
+            }
+            if (mastershipService.isLocalMaster(dstDev)) {
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
+                            event.type(), dstDev, srcDev, dstDev);
+                    setUpRoute(dstDev);
+                    setUpNextHopRules(dstDev);
+                });
+            }
+        }
 
-        return Utils.forgeSelectGroup(
-                deviceId, tableId, actionProfileId, groupId, actions, appId);
+        @Override
+        public boolean isRelevant(LinkEvent event) {
+            switch (event.type()) {
+                case LINK_ADDED:
+                    break;
+                case LINK_UPDATED:
+                case LINK_REMOVED:
+                default:
+                    return false;
+            }
+            DeviceId srcDev = event.subject().src().deviceId();
+            DeviceId dstDev = event.subject().dst().deviceId();
+            return mastershipService.isLocalMaster(srcDev) ||
+                    mastershipService.isLocalMaster(dstDev);
+        }
     }
 
-    /**
-     * Creates a routing flow rule that matches on the given IPv6 prefix and
-     * executes the given group ID.
-     *
-     * @param deviceId  the device where flow rule will be installed
-     * @param ip6Prefix the IPv6 prefix
-     * @param groupId   the group ID
-     * @return a flow rule
-     */
-    private FlowRule createRoutingRule(
-            DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
+    //--------------------------------------------------------------------------
+    // UTILITY METHODS
+    //--------------------------------------------------------------------------
 
-        // From P4Info.
-        String matchFieldId = "hdr.ipv6.dst_addr";
-        String tableId = "FabricIngress.l3_table";
-
-        // Match: LPM on IPv6 address.
-        PiCriterion match = PiCriterion.builder()
-                .matchLpm(PiMatchFieldId.of(matchFieldId),
-                          ip6Prefix.address().toOctets(),
-                          ip6Prefix.prefixLength())
-                .build();
-
-        // Action: set action profile group ID
-        PiTableAction action = PiActionProfileGroupId.of(groupId);
-
-        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
+    private void setUpHostRulesOnDevice(DeviceId deviceId) {
+        hostService.getConnectedHosts(deviceId)
+                .forEach(host -> setUpHostRules(deviceId, host));
     }
 
     /**
@@ -571,90 +690,5 @@ public class Ipv6RoutingComponent {
                 .map(Srv6DeviceConfig::mySid)
                 .orElseThrow(() -> new ItemNotFoundException(
                         "Missing mySid config for " + deviceId));
-    }
-
-    /**
-     * Listener of host events which triggers configuration of routing rules on
-     * the device where the host is attached.
-     */
-    class InternalHostListener implements HostListener {
-        @Override
-        public void event(HostEvent event) {
-            Host host = event.subject();
-            DeviceId deviceId = host.location().deviceId();
-            mainComponent.getExecutorService().execute(() -> {
-                log.info("{} event! host={}, deviceId={}, port={}",
-                         event.type(), host.id(), deviceId, host.location().port());
-                setUpHostRules(deviceId, host);
-            });
-        }
-
-        @Override
-        public boolean isRelevant(HostEvent event) {
-            switch (event.type()) {
-                case HOST_ADDED:
-                    break;
-                case HOST_REMOVED:
-                case HOST_UPDATED:
-                case HOST_MOVED:
-                default:
-                    // Ignore other events.
-                    // Food for thoughts:
-                    // how to support host moved/removed events?
-                    return false;
-            }
-            // Process host event only if this controller instance is the master
-            // for the device where this host is attached.
-            final Host host = event.subject();
-            final DeviceId deviceId = host.location().deviceId();
-            return mastershipService.isLocalMaster(deviceId);
-        }
-    }
-
-    /**
-     * Listener of link events.
-     */
-    class InternalLinkListener implements LinkListener {
-
-        @Override
-        public void event(LinkEvent event) {
-            DeviceId srcDev = event.subject().src().deviceId();
-            DeviceId dstDev = event.subject().dst().deviceId();
-
-            if (mastershipService.isLocalMaster(srcDev)) {
-                mainComponent.getExecutorService().execute(() -> {
-                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
-                             event.type(), srcDev, srcDev, dstDev);
-                    setUpMyStationTable(srcDev);
-                    setUpRoute(srcDev);
-                    setUpNextHopRules(srcDev);
-                });
-            }
-            if (mastershipService.isLocalMaster(dstDev)) {
-                mainComponent.getExecutorService().execute(() -> {
-                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
-                             event.type(), dstDev, srcDev, dstDev);
-                    setUpMyStationTable(dstDev);
-                    setUpRoute(dstDev);
-                    setUpNextHopRules(dstDev);
-                });
-            }
-        }
-
-        @Override
-        public boolean isRelevant(LinkEvent event) {
-            switch (event.type()) {
-                case LINK_ADDED:
-                    break;
-                case LINK_UPDATED:
-                case LINK_REMOVED:
-                default:
-                    return false;
-            }
-            DeviceId srcDev = event.subject().src().deviceId();
-            DeviceId dstDev = event.subject().dst().deviceId();
-            return mastershipService.isLocalMaster(srcDev) ||
-                    mastershipService.isLocalMaster(dstDev);
-        }
     }
 }
