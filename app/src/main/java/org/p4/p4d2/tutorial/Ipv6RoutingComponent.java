@@ -204,44 +204,6 @@ public class Ipv6RoutingComponent {
     }
 
     /**
-     * Creates a next hope flow rule in the L2 table, matching on the given
-     * destination MAC and with the given output port.
-     *
-     * @param deviceId the device
-     * @param nexthopMac   the next hop (destination) mac
-     * @param outPort  the output port
-     */
-    private FlowRule createNextHopRule(DeviceId deviceId, MacAddress nexthopMac,
-                                       PortNumber outPort) {
-        // HINT: this method create a flow for *l2_exact_table* table
-        //       which matches the *ethernet destination* and sets the output
-        //       port by invoking *set_output_port* action.
-        String tableId = "FabricIngress.l2_exact_table";
-
-        // FIXME TODO: create a match which matches destination mac to next hop
-        PiCriterion match = PiCriterion.builder()
-                // TODO: add code here
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                            nexthopMac.toBytes())
-                .build();
-
-        // TODO: create an action which sets the output port
-        // HINT: use *withId* method to set action id and use *withParameter*
-        //       to set action parameter
-        PiAction action = PiAction.builder()
-                // TODO: add code here
-                .withId(PiActionId.of("FabricIngress.set_output_port"))
-                .withParameter(new PiActionParam(
-                        PiActionParamId.of("port_num"), outPort.toLong()))
-                .build();
-
-        return Utils.forgeFlowRule(
-                deviceId, appId,
-                tableId,
-                match, action);
-    }
-
-    /**
      * Creates an ONOS SELECT group to provide ECMP forwarding for the given
      * collection of next hop MAC addresses. ONOS SELECT groups are equivalent
      * to P4Runtime action selector groups.
@@ -290,13 +252,9 @@ public class Ipv6RoutingComponent {
      */
     private FlowRule createRoutingRule(
             DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
-
-        // TODO: Fill Ids.
-        // HINT: the routing rule matches *destination IP* and forward the
-        //       packet to the next hop group
         String tableId = "FabricIngress.l3_table";
 
-        // TODO: Cerate a match for IPv6 address with LPM.
+        // TODO: Create a match for IPv6 address with LPM.
         // HINT: use *matchLpm* to match LPM
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
@@ -305,16 +263,56 @@ public class Ipv6RoutingComponent {
                         ip6Prefix.address().toOctets(),
                         ip6Prefix.prefixLength())
                 .build();
-        // ---- END SOLUTION ----
 
-        // FIXME make TODO
-        // Action: set action profile group ID
+        // TODO: Create a action which sets the action profile group ID
+        // HINT: you can use *PiActionProfileGroupId.of(id);* to create group action
         PiTableAction action = PiActionProfileGroupId.of(groupId);
+        // ---- END SOLUTION ----
 
         return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
     }
 
-    // ---------- end methods to work on ---------------- FIXME
+    /**
+     * Creates a next hope flow rule in the L2 table, matching on the given
+     * destination MAC and with the given output port.
+     *
+     * @param deviceId the device
+     * @param nexthopMac   the next hop (destination) mac
+     * @param outPort  the output port
+     */
+    private FlowRule createNextHopRule(DeviceId deviceId, MacAddress nexthopMac,
+                                       PortNumber outPort) {
+        // HINT: this method create a flow for *l2_exact_table* table
+        //       which matches the *ethernet destination* and sets the output
+        //       port by invoking *set_output_port* action.
+        String tableId = "FabricIngress.l2_exact_table";
+
+        // ---- START SOLUTION ----
+        // FIXME TODO: create a match which matches destination mac to next hop
+        PiCriterion match = PiCriterion.builder()
+                // TODO: add code here
+                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                            nexthopMac.toBytes())
+                .build();
+
+        // TODO: create an action which sets the output port
+        // HINT: use *withId* method to set action id and use *withParameter*
+        //       to set action parameter
+        PiAction action = PiAction.builder()
+                // TODO: add code here
+                .withId(PiActionId.of("FabricIngress.set_output_port"))
+                .withParameter(new PiActionParam(
+                        PiActionParamId.of("port_num"), outPort.toLong()))
+                .build();
+        // ---- END SOLUTION ----
+
+        return Utils.forgeFlowRule(
+                deviceId, appId,
+                tableId,
+                match, action);
+    }
+
+    // ---------- END METHODS TO COMPLETE ----------------
 
     /**
      * Set up nexthop rules of a device.
