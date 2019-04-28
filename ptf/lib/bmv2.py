@@ -76,13 +76,14 @@ def watchdog(sw):
 
 class Bmv2Switch:
     def __init__(self, device_id, port_map_path, grpc_port, cpu_port,
-                 loglevel='warn', is_stratum=False, debugger=False):
+                 logfile_path, loglevel='warn', is_stratum=False,
+                 debugger=False):
         self.device_id = device_id
         self.port_map_path = port_map_path
         self.grpc_port = int(grpc_port)
         self.cpu_port = cpu_port
         self.loglevel = loglevel
-        self.logfile = '%s.log' % BMV2_RUNTIME_FILE_PATH_PREFIX
+        self.logfile = logfile_path
         self.logfd = None
         self.bmv2popen = None
         self.is_stratum = is_stratum
