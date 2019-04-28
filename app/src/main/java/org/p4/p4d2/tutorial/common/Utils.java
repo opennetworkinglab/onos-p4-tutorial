@@ -16,27 +16,21 @@
 
 package org.p4.p4d2.tutorial.common;
 
-import com.google.common.collect.Lists;
 import org.onosproject.core.ApplicationId;
-import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.PortNumber;
-import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.DefaultFlowRule;
 import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
-import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
 import org.onosproject.net.group.DefaultGroupBucket;
 import org.onosproject.net.group.DefaultGroupDescription;
 import org.onosproject.net.group.DefaultGroupKey;
-import org.onosproject.net.group.Group;
 import org.onosproject.net.group.GroupBucket;
 import org.onosproject.net.group.GroupBuckets;
 import org.onosproject.net.group.GroupDescription;
 import org.onosproject.net.group.GroupKey;
-import org.onosproject.net.group.GroupService;
 import org.onosproject.net.pi.model.PiActionProfileId;
 import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
@@ -54,8 +48,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.onosproject.net.group.DefaultGroupBucket.createAllGroupBucket;
 import static org.onosproject.net.group.DefaultGroupBucket.createCloneGroupBucket;
-import static org.p4.p4d2.tutorial.AppConstants.CLEAN_UP_DELAY;
-import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_CLEAN_UP_RETRY_TIMES;
 import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_FLOW_RULE_PRIORITY;
 
 public final class Utils {
@@ -143,43 +135,6 @@ public final class Utils {
                 groupKey,
                 groupId,
                 appId);
-    }
-
-    public static void waitPreviousCleanup(ApplicationId appId,
-                                           DeviceService deviceService,
-                                           FlowRuleService flowRuleService,
-                                           GroupService groupService) {
-        int retry = DEFAULT_CLEAN_UP_RETRY_TIMES;
-        while (retry != 0) {
-            Collection<FlowRule> flows = Lists.newArrayList(
-                    flowRuleService.getFlowEntriesById(appId).iterator());
-
-            Collection<Group> groups = Lists.newArrayList();
-            if (groupService != null) {
-                for (Device device : deviceService.getAvailableDevices()) {
-                    groupService.getGroups(device.id(), appId).forEach(groups::add);
-                }
-            }
-
-            if (flows.isEmpty() && groups.isEmpty()) {
-                break;
-            }
-
-            flows.forEach(flowRuleService::removeFlowRules);
-            if (!groups.isEmpty() && groupService != null) {
-                // Wait for flows to be removed in case those depend on groups.
-                sleep(1000);
-                groups.forEach(g -> groupService.removeGroup(
-                        g.deviceId(), g.appCookie(), g.appId()));
-            }
-
-            log.info("Waiting to remove {} flows and {} groups from " +
-                             "previous execution of {}...",
-                     flows.size(), groups.size(), appId.name());
-            sleep(CLEAN_UP_DELAY);
-            --retry;
-        }
-        log.debug("Clean up done ({})", appId.name());
     }
 
     public static void sleep(int millis) {

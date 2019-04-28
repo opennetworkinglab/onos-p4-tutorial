@@ -21,9 +21,8 @@ import org.onlab.packet.Ip6Prefix;
 import org.onlab.packet.IpAddress;
 import org.onlab.packet.IpPrefix;
 import org.onlab.packet.MacAddress;
-import org.onlab.util.SharedScheduledExecutors;
+import org.onlab.util.ItemNotFoundException;
 import org.onosproject.core.ApplicationId;
-import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
@@ -33,8 +32,6 @@ import org.onosproject.net.PortNumber;
 import org.onosproject.net.config.NetworkConfigService;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.FlowRule;
-import org.onosproject.net.flow.FlowRuleOperations;
-import org.onosproject.net.flow.FlowRuleOperationsContext;
 import org.onosproject.net.flow.FlowRuleService;
 import org.onosproject.net.flow.criteria.PiCriterion;
 import org.onosproject.net.group.GroupDescription;
@@ -70,9 +67,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.Streams.stream;
@@ -86,16 +80,9 @@ public class Ipv6RoutingComponent {
 
     private static final Logger log = LoggerFactory.getLogger(Ipv6RoutingComponent.class);
 
-    private static final String APP_NAME = AppConstants.APP_PREFIX + ".ipv6routing";
+    private static final long GROUP_INSTALLATION_DELAY = 200;
 
-    private static final long GROUP_INSTALLATION_DELAY = 500;
-
-    // Number of threads to handle host and link event.
-    private static final int NUM_THREADS = 2;
     private static final int DEFAULT_ECMP_GROUP_ID = 0xec3b0000;
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private CoreService coreService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private FlowRuleService flowRuleService;
@@ -121,27 +108,23 @@ public class Ipv6RoutingComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private LinkService linkService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private MainComponent mainComponent;
+
     private final HostListener hostListener = new InternalHostListener();
     private final LinkListener linkListener = new InternalLinkListener();
 
-    private ExecutorService executorService;
     private ApplicationId appId;
 
     @Activate
     protected void activate() {
-        appId = coreService.registerApplication(APP_NAME);
-
-        // Wait to remove flow and groups from previous executions.
-        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, groupService);
+        appId = mainComponent.getAppId();
 
         hostService.addListener(hostListener);
         linkService.addListener(linkListener);
 
-        executorService = Executors.newFixedThreadPool(NUM_THREADS);
-
         // Schedule set up for all devices.
-        SharedScheduledExecutors.newTimeout(
-                this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
+        mainComponent.scheduleTask(this::setUpAllDevices, INITIAL_SETUP_DELAY);
 
         log.info("Started");
     }
@@ -150,8 +133,6 @@ public class Ipv6RoutingComponent {
     protected void deactivate() {
         hostService.removeListener(hostListener);
         linkService.removeListener(linkListener);
-
-        cleanUpAllDevices();
 
         log.info("Stopped");
     }
@@ -166,38 +147,12 @@ public class Ipv6RoutingComponent {
                 .map(Device::id)
                 .filter(mastershipService::isLocalMaster)
                 .forEach(deviceId -> {
+                    log.info("*** IPV6 ROUTING - Starting initial set up for {}...", deviceId);
                     setUpMyStationTable(deviceId);
                     setUpRoute(deviceId);
                     setUpNextHopRules(deviceId);
                     setUpHostRulesOnDevice(deviceId);
                 });
-    }
-
-    /**
-     * Cleans up IPv6 routing runtime configuration from all for which this ONOS
-     * node instance is currently master.
-     */
-    private void cleanUpAllDevices() {
-        Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
-                .map(Device::id)
-                .filter(mastershipService::isLocalMaster)
-                .collect(Collectors.toSet());
-
-        for (DeviceId deviceId : deviceIds) {
-            FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-            FlowRuleOperationsContext callback = new FlowRuleOperationsContext() {
-                @Override
-                public void onSuccess(FlowRuleOperations ops) {
-                    groupService.getGroups(deviceId, appId)
-                            .forEach(group -> groupService.removeGroup(
-                                    deviceId, group.appCookie(), appId));
-                }
-            };
-            stream(flowRuleService.getFlowEntries(deviceId))
-                    .filter(fe -> fe.appId() == appId.id())
-                    .forEach(ops::remove);
-            flowRuleService.apply(ops.build(callback));
-        }
     }
 
     /**
@@ -515,7 +470,7 @@ public class Ipv6RoutingComponent {
      */
     private boolean isSpine(DeviceId deviceId) {
         return getDeviceConfig(deviceId).map(Srv6DeviceConfig::isSpine)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ItemNotFoundException(
                         "Missing isSpine config for " + deviceId));
     }
 
@@ -539,7 +494,7 @@ public class Ipv6RoutingComponent {
     private MacAddress getMyStationMac(DeviceId deviceId) {
         return getDeviceConfig(deviceId)
                 .map(Srv6DeviceConfig::myStationMac)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ItemNotFoundException(
                         "Missing myStationMac config for " + deviceId));
     }
 
@@ -611,7 +566,7 @@ public class Ipv6RoutingComponent {
     private Ip6Address getDeviceSid(DeviceId deviceId) {
         return getDeviceConfig(deviceId)
                 .map(Srv6DeviceConfig::mySid)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ItemNotFoundException(
                         "Missing mySid config for " + deviceId));
     }
 
@@ -624,9 +579,11 @@ public class Ipv6RoutingComponent {
         public void event(HostEvent event) {
             Host host = event.subject();
             DeviceId deviceId = host.location().deviceId();
-            log.info("{} event! host={}, deviceId={}, port={}",
-                     event.type(), host.id(), deviceId, host.location().port());
-            executorService.submit(() -> setUpHostRules(deviceId, host));
+            mainComponent.getExecutorService().execute(() -> {
+                log.info("{} event! host={}, deviceId={}, port={}",
+                         event.type(), host.id(), deviceId, host.location().port());
+                setUpHostRules(deviceId, host);
+            });
         }
 
         @Override
@@ -660,17 +617,20 @@ public class Ipv6RoutingComponent {
         public void event(LinkEvent event) {
             DeviceId srcDev = event.subject().src().deviceId();
             DeviceId dstDev = event.subject().dst().deviceId();
-            log.info("{} event! src={}, dst={}", event.type(), srcDev, dstDev);
 
             if (mastershipService.isLocalMaster(srcDev)) {
-                executorService.submit(() -> {
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
+                             event.type(), srcDev, srcDev, dstDev);
                     setUpMyStationTable(srcDev);
                     setUpRoute(srcDev);
                     setUpNextHopRules(srcDev);
                 });
             }
             if (mastershipService.isLocalMaster(dstDev)) {
-                executorService.submit(() -> {
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! Configuring {}... linkSrc={}, linkDst={}",
+                             event.type(), dstDev, srcDev, dstDev);
                     setUpMyStationTable(dstDev);
                     setUpRoute(dstDev);
                     setUpNextHopRules(dstDev);

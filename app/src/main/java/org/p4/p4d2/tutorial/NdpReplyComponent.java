@@ -19,9 +19,8 @@ package org.p4.p4d2.tutorial;
 import org.onlab.packet.Ip6Address;
 import org.onlab.packet.IpAddress;
 import org.onlab.packet.MacAddress;
-import org.onlab.util.SharedScheduledExecutors;
+import org.onlab.util.ItemNotFoundException;
 import org.onosproject.core.ApplicationId;
-import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.config.NetworkConfigService;
@@ -52,29 +51,24 @@ import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
-import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.p4.p4d2.tutorial.AppConstants.APP_PREFIX;
 import static org.p4.p4d2.tutorial.AppConstants.DEFAULT_FLOW_RULE_PRIORITY;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 /**
- * Application which manage the `ndp_reply` table.
+ * App component that configures devices to generate NDP Neighbor Advertisement
+ * packets for all interface IPv6 addresses configured in the netcfg.
  */
 @Component(immediate = true)
 public class NdpReplyComponent {
+
     private static final Logger log =
             LoggerFactory.getLogger(NdpReplyComponent.class.getName());
-    private static final String APP_NAME = APP_PREFIX + ".ndpreply";
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    protected CoreService coreService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected NetworkConfigService configService;
@@ -91,63 +85,69 @@ public class NdpReplyComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected DeviceService deviceService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private MainComponent mainComponent;
+
     private DeviceListener deviceListener = new InternalDeviceListener();
     private ApplicationId appId;
 
     @Activate
     public void activate() {
-        appId = coreService.registerApplication(APP_NAME);
-        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, null);
+        appId = mainComponent.getAppId();
+
         deviceService.addListener(deviceListener);
-        SharedScheduledExecutors.newTimeout(
-                this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
+
+        mainComponent.scheduleTask(this::setUpAllDevices, INITIAL_SETUP_DELAY);
+
         log.info("Started");
     }
 
     @Deactivate
     public void deactivate() {
         deviceService.removeListener(deviceListener);
-        clearAllDevice();
+
         log.info("Stopped");
     }
 
     private void setUpAllDevices() {
         deviceService.getAvailableDevices().forEach(device -> {
             if (mastershipService.isLocalMaster(device.id())) {
-                Srv6DeviceConfig config = configService.getConfig(device.id(), Srv6DeviceConfig.class);
-                if (config == null) {
-                    // Config not available yet
-                    return;
-                }
-                processSrv6Config(config);
+                log.info("*** NDP REPLY - Starting Initial set up for {}...", device.id());
+                setUpDevice(device.id());
             }
         });
     }
 
-    private void clearAllDevice() {
-        flowRuleService.removeFlowRulesById(appId);
-    }
-
-    private synchronized void processSrv6Config(Srv6DeviceConfig config) {
-        final DeviceId deviceId = config.subject();
-        if (!mastershipService.isLocalMaster(deviceId)) {
-            // Handles by other node.
-            log.debug("Ignores device {} since it is not belong to this node.", deviceId);
-            return;
+    private void setUpDevice(DeviceId deviceId) {
+        Srv6DeviceConfig config = configService.getConfig(deviceId, Srv6DeviceConfig.class);
+        if (config == null) {
+            // Config not available yet
+            throw new ItemNotFoundException("Missing Srv6Config for " + deviceId);
         }
-        MacAddress deviceMac = config.myStationMac();
+
+        final MacAddress deviceMac = config.myStationMac();
 
         // Get all interface for the device
-        Collection<Interface> interfaces = interfaceService.getInterfaces()
+        final Collection<Interface> interfaces = interfaceService.getInterfaces()
                 .stream()
                 .filter(iface -> iface.connectPoint().deviceId().equals(deviceId))
                 .collect(Collectors.toSet());
 
-        Collection<FlowRule> flowRules = interfaces.stream()
+        if (interfaces.isEmpty()) {
+            log.info("{} does not have any IPv6 interface configured",
+                     deviceId);
+            return;
+        }
+
+        log.info("Adding rules to {} to generate NDP NA for {} IPv6 interfaces...",
+                 deviceId, interfaces.size());
+
+        final Collection<FlowRule> flowRules = interfaces.stream()
                 .map(this::getIp6Addresses)
                 .flatMap(Collection::stream)
-                .map(iaddr -> genNdpReplyRules(deviceId, deviceMac, iaddr))
+                .map(iaddr -> buildNdpReplyFlowRule(deviceId, deviceMac, iaddr))
                 .collect(Collectors.toSet());
+
         installRules(flowRules);
     }
 
@@ -166,9 +166,9 @@ public class NdpReplyComponent {
         flowRuleService.apply(ops.build());
     }
 
-    private FlowRule genNdpReplyRules(DeviceId deviceId,
-                                      MacAddress deviceMac,
-                                      Ip6Address targetIp) {
+    private FlowRule buildNdpReplyFlowRule(DeviceId deviceId,
+                                           MacAddress deviceMac,
+                                           Ip6Address targetIp) {
         PiCriterion match = PiCriterion.builder()
                 .matchExact(PiMatchFieldId.of("hdr.ndp.target_addr"), targetIp.toOctets())
                 .build();
@@ -199,24 +199,39 @@ public class NdpReplyComponent {
                 .build();
     }
 
-    class InternalDeviceListener implements DeviceListener {
-
-        @Override
-        public void event(DeviceEvent event) {
-            switch (event.type()) {
-                case DEVICE_ADDED:
-                case DEVICE_AVAILABILITY_CHANGED:
-                    setUpAllDevices();
-                    break;
-                default:
-                    log.debug("Unsupported event type {}", event.type());
-                    break;
-            }
-        }
+    /**
+     * Listener of device events.
+     */
+    public class InternalDeviceListener implements DeviceListener {
 
         @Override
         public boolean isRelevant(DeviceEvent event) {
-            return mastershipService.isLocalMaster(event.subject().id());
+            switch (event.type()) {
+                case DEVICE_ADDED:
+                case DEVICE_AVAILABILITY_CHANGED:
+                    break;
+                default:
+                    // Ignore other events.
+                    return false;
+            }
+            // Process only if this controller instance is the master.
+            final DeviceId deviceId = event.subject().id();
+            return mastershipService.isLocalMaster(deviceId);
+        }
+
+        @Override
+        public void event(DeviceEvent event) {
+            final DeviceId deviceId = event.subject().id();
+            if (deviceService.isAvailable(deviceId)) {
+                // A P4Runtime device is considered available in ONOS when there
+                // is a StreamChannel session open and the pipeline
+                // configuration has been set.
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! deviceId={}", event.type(), deviceId);
+
+                    setUpDevice(deviceId);
+                });
+            }
         }
     }
 }

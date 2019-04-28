@@ -24,7 +24,7 @@ import java.util.Map;
 
 public class AppConstants {
 
-    public static final String APP_PREFIX = "org.p4.srv6-tutorial";
+    public static final String APP_NAME = "org.p4.srv6-tutorial";
     public static final PiPipeconfId PIPECONF_ID = new PiPipeconfId("org.p4.srv6-tutorial");
 
     // From the P4Info file. Needed for mapping flow rules and flow objectives
@@ -33,9 +33,6 @@ public class AppConstants {
     public static final String DROP_ACTION = "FabricIngress.drop";
     public static final String CLONE_TO_CPU = "FabricIngress.clone_to_cpu";
     public static final String NO_ACTION = "NoAction";
-
-    public static final String INGRESS_PORT_CTRL_METADATA = "ingress_port";
-    public static final String EGRESS_PORT_CTRL_METADATA = "egress_port";
 
     public static final Map<Criterion.Type, String> CRITERION_MAP =
             new ImmutableMap.Builder<Criterion.Type, String>()
@@ -50,7 +47,7 @@ public class AppConstants {
                     .build();
 
     public static final int DEFAULT_FLOW_RULE_PRIORITY = 10;
-    public static final int INITIAL_SETUP_DELAY = 5; // Seconds.
+    public static final int INITIAL_SETUP_DELAY = 2; // Seconds.
     public static final int CLEAN_UP_DELAY = 2000; // milliseconds
     public static final int DEFAULT_CLEAN_UP_RETRY_TIMES = 10;
 

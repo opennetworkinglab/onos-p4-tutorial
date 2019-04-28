@@ -17,9 +17,7 @@
 package org.p4.p4d2.tutorial;
 
 import org.onlab.packet.MacAddress;
-import org.onlab.util.SharedScheduledExecutors;
 import org.onosproject.core.ApplicationId;
-import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
@@ -56,10 +54,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.p4.p4d2.tutorial.AppConstants.APP_PREFIX;
 import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
@@ -71,7 +67,6 @@ public class L2BridgingComponent {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    private static final String APP_NAME = APP_PREFIX + ".l2bridging";
     private static final int DEFAULT_BROADCAST_GROUP_ID = 255;
 
     private final DeviceListener deviceListener = new InternalDeviceListener();
@@ -85,9 +80,6 @@ public class L2BridgingComponent {
     // These variables are set by the Karaf runtime environment before calling
     // the activate() method.
     //--------------------------------------------------------------------------
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private CoreService coreService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private HostService hostService;
@@ -110,6 +102,9 @@ public class L2BridgingComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private MastershipService mastershipService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private MainComponent mainComponent;
+
     //--------------------------------------------------------------------------
     // COMPONENT ACTIVATION.
     //
@@ -119,22 +114,22 @@ public class L2BridgingComponent {
 
     @Activate
     protected void activate() {
-        appId = coreService.registerApplication(APP_NAME);
-        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, groupService);
+        appId = mainComponent.getAppId();
+
         // Register listeners to be informed about device and host events.
         deviceService.addListener(deviceListener);
         hostService.addListener(hostListener);
         // Schedule set up of existing devices. Needed when reloading the app.
-        SharedScheduledExecutors.newTimeout(
-                this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
+        mainComponent.scheduleTask(this::setUpAllDevices, INITIAL_SETUP_DELAY);
+
         log.info("Started");
     }
 
     @Deactivate
     protected void deactivate() {
         deviceService.removeListener(deviceListener);
-        // Remove flows and groups installed by this app.
-        cleanUpAllDevices();
+        hostService.removeListener(hostListener);
+
         log.info("Stopped");
     }
 
@@ -326,12 +321,15 @@ public class L2BridgingComponent {
         @Override
         public void event(DeviceEvent event) {
             final DeviceId deviceId = event.subject().id();
-            log.info("{} event! deviceId={}", event.type(), deviceId);
             if (deviceService.isAvailable(deviceId)) {
                 // A P4Runtime device is considered available in ONOS when there
                 // is a StreamChannel session open and the pipeline
                 // configuration has been set.
-                setUpDevice(deviceId);
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! deviceId={}", event.type(), deviceId);
+
+                    setUpDevice(deviceId);
+                });
             }
         }
     }
@@ -370,10 +368,12 @@ public class L2BridgingComponent {
             final DeviceId deviceId = host.location().deviceId();
             final PortNumber port = host.location().port();
 
-            log.info("{} event! host={}, deviceId={}, port={}",
-                     event.type(), host.id(), deviceId, port);
+            mainComponent.getExecutorService().execute(() -> {
+                log.info("{} event! host={}, deviceId={}, port={}",
+                         event.type(), host.id(), deviceId, port);
 
-            learnHost(host, deviceId, port);
+                learnHost(host, deviceId, port);
+            });
         }
     }
 
@@ -416,6 +416,7 @@ public class L2BridgingComponent {
     private void setUpAllDevices() {
         deviceService.getAvailableDevices().forEach(device -> {
             if (mastershipService.isLocalMaster(device.id())) {
+                log.info("*** L2 BRIDGING - Starting initial set up for {}...", device.id());
                 setUpDevice(device.id());
                 // For all hosts connected to this device...
                 hostService.getConnectedHosts(device.id()).forEach(
@@ -423,30 +424,5 @@ public class L2BridgingComponent {
                                           host.location().port()));
             }
         });
-    }
-
-    /**
-     * Cleans up L2 bridging runtime configuration from all devices known by
-     * ONOS and for which this ONOS node instance is currently master.
-     */
-    private void cleanUpAllDevices() {
-        deviceService.getDevices().forEach(device -> {
-            if (mastershipService.isLocalMaster(device.id())) {
-                cleanUpDevice(device.id());
-            }
-        });
-    }
-
-    /**
-     * Cleans up the L2 bridging runtime configuration from the given device.
-     *
-     * @param deviceId the device to clean up
-     */
-    private void cleanUpDevice(DeviceId deviceId) {
-        log.info("Cleaning up L2 bridging on {}...", deviceId);
-        // Remove all runtime entities installed by this app.
-        flowRuleService.removeFlowRulesById(appId);
-        groupService.getGroups(deviceId, appId).forEach(
-                group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
     }
 }

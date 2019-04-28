@@ -17,6 +17,8 @@
 package org.p4.p4d2.tutorial.pipeconf;
 
 import org.onosproject.net.behaviour.Pipeliner;
+import org.onosproject.net.driver.DriverAdminService;
+import org.onosproject.net.driver.DriverProvider;
 import org.onosproject.net.pi.model.DefaultPiPipeconf;
 import org.onosproject.net.pi.model.PiPipeconf;
 import org.onosproject.net.pi.model.PiPipelineInterpreter;
@@ -33,6 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URL;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.BMV2_JSON;
 import static org.onosproject.net.pi.model.PiPipeconf.ExtensionType.P4_INFO_TEXT;
@@ -41,7 +45,7 @@ import static org.p4.p4d2.tutorial.AppConstants.PIPECONF_ID;
 /**
  * Component that builds and register the pipeconf at app activation.
  */
-@Component(immediate = true)
+@Component(immediate = true, service = PipeconfLoader.class)
 public final class PipeconfLoader {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
@@ -53,6 +57,9 @@ public final class PipeconfLoader {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private PiPipeconfService pipeconfService;
 
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private DriverAdminService driverAdminService;
+
     @Activate
     public void activate() {
         // Registers the pipeconf at component activation.
@@ -61,6 +68,7 @@ public final class PipeconfLoader {
             // pipeconf during the tutorial.
             pipeconfService.unregister(PIPECONF_ID);
         }
+        removePipeconfDrivers();
         try {
             pipeconfService.register(buildPipeconf());
         } catch (P4InfoParserException e) {
@@ -87,5 +95,22 @@ public final class PipeconfLoader {
                 .addExtension(P4_INFO_TEXT, p4InfoUrl)
                 .addExtension(BMV2_JSON, bmv2JsonUrlUrl)
                 .build();
+    }
+
+    private void removePipeconfDrivers() {
+        List<DriverProvider> driverProvidersToRemove = driverAdminService
+                .getProviders().stream()
+                .filter(p -> p.getDrivers().stream()
+                        .anyMatch(d -> d.name().endsWith(PIPECONF_ID.id())))
+                .collect(Collectors.toList());
+
+        if (driverProvidersToRemove.isEmpty()) {
+            return;
+        }
+
+        log.info("Found {} outdated drivers for pipeconf '{}', removing...",
+                 driverProvidersToRemove.size(), PIPECONF_ID);
+
+        driverProvidersToRemove.forEach(driverAdminService::unregisterProvider);
     }
 }
