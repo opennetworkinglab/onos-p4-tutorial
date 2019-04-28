@@ -85,9 +85,10 @@ def watchDog(sw):
                 if s.connect_ex(('localhost', port)) == 0:
                     time.sleep(1)
                 else:
-                    warn("\n*** WARN: switch %s died ☠️ \n" % sw.name)
-                    sw.printBmv2Log()
-                    print ("-" * 80) + "\n"
+                    warn("\n*** WARN: switch %s crashed ☠️, restarting... \n"
+                         % sw.name)
+                    sw.stop()
+                    sw.start()
                     return
     except Exception as e:
         warn("*** ERROR: " + e.message)
@@ -163,6 +164,7 @@ class ONOSBmv2Switch(Switch):
         # this as a signal to terminate the switch instance (if active).
         self.keepaliveFile = '/tmp/bmv2-%s-watchdog.out' % self.name
         self.targetName = STRATUM_BMV2 if self.useStratum else SIMPLE_SWITCH_GRPC
+        self.controllers = None
 
         # Remove files from previous executions
         self.cleanupTmpFiles()
@@ -288,11 +290,16 @@ nodes {{
         except urllib2.URLError as e:
             warn("*** WARN: unable to push config to ONOS (%s)\n" % e.reason)
 
-    def start(self, controllers):
+    def start(self, controllers=None):
 
         if not self.stopped:
             warn("*** %s is already running!\n" % self.name)
             return
+
+        if controllers is not None:
+            #  If restarting after crash use same controllers as for first
+            #  start.
+            self.controllers = controllers
 
         # Remove files from previous executions (if we are restarting)
         self.cleanupTmpFiles()
@@ -334,7 +341,7 @@ nodes {{
                 # We want to be notified if BMv2/Stratum dies...
                 threading.Thread(target=watchDog, args=[self]).start()
 
-            self.doOnosNetcfg(self.controllerIp(controllers))
+            self.doOnosNetcfg(self.controllerIp(self.controllers))
         except Exception:
             ONOSBmv2Switch.mininet_exception = 1
             self.killBmv2()
