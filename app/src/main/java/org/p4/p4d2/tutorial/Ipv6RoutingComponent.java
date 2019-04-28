@@ -31,6 +31,8 @@ import org.onosproject.net.Host;
 import org.onosproject.net.Link;
 import org.onosproject.net.PortNumber;
 import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleService;
@@ -117,6 +119,7 @@ public class Ipv6RoutingComponent {
 
     private final HostListener hostListener = new InternalHostListener();
     private final LinkListener linkListener = new InternalLinkListener();
+    private final DeviceListener deviceListener = new InternalDeviceListener();
 
     private ApplicationId appId;
 
@@ -133,6 +136,7 @@ public class Ipv6RoutingComponent {
 
         hostService.addListener(hostListener);
         linkService.addListener(linkListener);
+        deviceService.addListener(deviceListener);
 
         // Schedule set up for all devices.
         mainComponent.scheduleTask(this::setUpAllDevices, INITIAL_SETUP_DELAY);
@@ -144,6 +148,7 @@ public class Ipv6RoutingComponent {
     protected void deactivate() {
         hostService.removeListener(hostListener);
         linkService.removeListener(linkListener);
+        deviceService.removeListener(deviceListener);
 
         log.info("Stopped");
     }
@@ -569,6 +574,34 @@ public class Ipv6RoutingComponent {
             DeviceId dstDev = event.subject().dst().deviceId();
             return mastershipService.isLocalMaster(srcDev) ||
                     mastershipService.isLocalMaster(dstDev);
+        }
+    }
+
+    class InternalDeviceListener implements DeviceListener {
+
+        @Override
+        public void event(DeviceEvent event) {
+            mainComponent.getExecutorService().execute(() -> {
+                DeviceId deviceId = event.subject().id();
+                log.info("{} event! Configuring {}... device id={}",
+                        event.type(), deviceId);
+                setUpMyStationTable(deviceId);
+            });
+        }
+
+        @Override
+        public boolean isRelevant(DeviceEvent event) {
+            switch (event.type()) {
+                case DEVICE_AVAILABILITY_CHANGED:
+                case DEVICE_ADDED:
+                    break;
+                default:
+                    return false;
+            }
+
+            DeviceId deviceId = event.subject().id();
+            return mastershipService.isLocalMaster(deviceId) &&
+                    deviceService.isAvailable(event.subject().id());
         }
     }
 
