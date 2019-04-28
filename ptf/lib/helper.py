@@ -278,3 +278,15 @@ class P4InfoHelper(object):
             meta.metadata_id = p4info_meta.id
             meta.value = encode(value, p4info_meta.bitwidth)
         return packet_out
+
+    def build_packet_in(self, payload, metadata=None):
+        packet_in = p4runtime_pb2.PacketIn()
+        packet_in.payload = payload
+        if not metadata:
+            return packet_in
+        for name, value in metadata.items():
+            p4info_meta = self.get_packet_metadata("packet_in", name)
+            meta = packet_in.metadata.add()
+            meta.metadata_id = p4info_meta.id
+            meta.value = encode(value, p4info_meta.bitwidth)
+        return packet_in

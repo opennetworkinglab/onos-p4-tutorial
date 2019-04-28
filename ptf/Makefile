@@ -19,3 +19,4 @@ p4src:
 clean:
 	rm -rf ptf.log
 	rm -rf ptf.pcap
+	rm -rf bmv2.log

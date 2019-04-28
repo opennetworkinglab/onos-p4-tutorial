@@ -35,6 +35,9 @@ from p4.v1 import p4runtime_pb2
 
 from lib.bmv2 import Bmv2Switch
 
+PTF_ROOT = os.path.dirname(os.path.realpath(__file__))
+BMV2_LOG = PTF_ROOT + "/bmv2.log"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PTF runner")
 
@@ -336,7 +339,8 @@ def main():
                                  port_map_path=args.port_map,
                                  grpc_port=grpc_port,
                                  cpu_port=args.cpu_port,
-                                 loglevel='debug')
+                                 loglevel='debug',
+                                 logfile_path=BMV2_LOG)
             bmv2_sw.start()
         elif device == 'stratum-bmv2':
             bmv2_sw = Bmv2Switch(device_id=args.device_id,
@@ -344,7 +348,8 @@ def main():
                                  grpc_port=grpc_port,
                                  cpu_port=args.cpu_port,
                                  loglevel='debug',
-                                 is_stratum=True)
+                                 is_stratum=True,
+                                 logfile_path=BMV2_LOG)
             bmv2_sw.start()
 
     try:

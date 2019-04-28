@@ -16,9 +16,7 @@
 package org.p4.p4d2.tutorial;
 
 import org.onlab.packet.Ip6Address;
-import org.onlab.util.SharedScheduledExecutors;
 import org.onosproject.core.ApplicationId;
-import org.onosproject.core.CoreService;
 import org.onosproject.mastership.MastershipService;
 import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
@@ -37,16 +35,18 @@ import org.onosproject.net.pi.model.PiTableId;
 import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
 import org.onosproject.net.pi.runtime.PiTableAction;
-import org.osgi.service.component.annotations.*;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.p4.p4d2.tutorial.common.Srv6DeviceConfig;
 import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -61,17 +61,12 @@ public class Srv6Component {
 
     private static final Logger log = LoggerFactory.getLogger(Srv6Component.class);
 
-    private static final String APP_NAME = AppConstants.APP_PREFIX + ".srv6";
-
     //--------------------------------------------------------------------------
     // ONOS CORE SERVICE BINDING
     //
     // These variables are set by the Karaf runtime environment before calling
     // the activate() method.
     //--------------------------------------------------------------------------
-
-    @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    private CoreService coreService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private FlowRuleService flowRuleService;
@@ -84,6 +79,9 @@ public class Srv6Component {
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private NetworkConfigService networkConfigService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    private MainComponent mainComponent;
 
     private final DeviceListener deviceListener = new Srv6Component.InternalDeviceListener();
 
@@ -98,17 +96,13 @@ public class Srv6Component {
 
     @Activate
     protected void activate() {
-        appId = coreService.registerApplication(APP_NAME);
-
-        // Wait to remove flow and groups from previous executions.
-        Utils.waitPreviousCleanup(appId, deviceService, flowRuleService, null);
+        appId = mainComponent.getAppId();
 
         // Register listeners to be informed about device and host events.
         deviceService.addListener(deviceListener);
 
         // Schedule set up for all devices.
-        SharedScheduledExecutors.newTimeout(
-                this::setUpAllDevices, INITIAL_SETUP_DELAY, TimeUnit.SECONDS);
+        mainComponent.scheduleTask(this::setUpAllDevices, INITIAL_SETUP_DELAY);
 
         log.info("Started");
     }
@@ -116,9 +110,6 @@ public class Srv6Component {
     @Deactivate
     protected void deactivate() {
         deviceService.removeListener(deviceListener);
-
-        // Remove flows and groups installed by this app.
-        cleanUpAllDevices();
 
         log.info("Stopped");
     }
@@ -135,7 +126,11 @@ public class Srv6Component {
      * @param deviceId the device Id
      */
     private void setUpMySidTable(DeviceId deviceId) {
+
         Ip6Address mySid = getMySid(deviceId);
+
+        log.info("Adding mySid rule on {} (sid {})...", deviceId, mySid);
+
         PiCriterion match = PiCriterion.builder()
                 .matchTernary(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
                         mySid.toOctets(), Ip6Address.makeMaskPrefix(128).toOctets())
@@ -209,16 +204,39 @@ public class Srv6Component {
     // Events are processed only if isRelevant() returns true.
     //--------------------------------------------------------------------------
 
+    /**
+     * Listener of device events.
+     */
     public class InternalDeviceListener implements DeviceListener {
+
         @Override
         public boolean isRelevant(DeviceEvent event) {
-            return mastershipService.isLocalMaster(event.subject().id()) &&
-                    !event.type().equals(DeviceEvent.Type.DEVICE_REMOVED);
+            switch (event.type()) {
+                case DEVICE_ADDED:
+                case DEVICE_AVAILABILITY_CHANGED:
+                    break;
+                default:
+                    // Ignore other events.
+                    return false;
+            }
+            // Process only if this controller instance is the master.
+            final DeviceId deviceId = event.subject().id();
+            return mastershipService.isLocalMaster(deviceId);
         }
 
         @Override
         public void event(DeviceEvent event) {
-            setUpMySidTable(event.subject().id());
+            final DeviceId deviceId = event.subject().id();
+            if (deviceService.isAvailable(deviceId)) {
+                // A P4Runtime device is considered available in ONOS when there
+                // is a StreamChannel session open and the pipeline
+                // configuration has been set.
+                mainComponent.getExecutorService().execute(() -> {
+                    log.info("{} event! deviceId={}", event.type(), deviceId);
+
+                    setUpMySidTable(event.subject().id());
+                });
+            }
         }
     }
 
@@ -236,25 +254,10 @@ public class Srv6Component {
         stream(deviceService.getAvailableDevices())
                 .map(Device::id)
                 .filter(mastershipService::isLocalMaster)
-                .forEach(this::setUpMySidTable);
-    }
-
-    /**
-     * Cleans up SRv6 My SID table and any custom insert policies.
-     */
-    private void cleanUpAllDevices() {
-        Collection<DeviceId> deviceIds = stream(deviceService.getAvailableDevices())
-                .map(Device::id)
-                .filter(mastershipService::isLocalMaster)
-                .collect(Collectors.toSet());
-
-        for (DeviceId deviceId : deviceIds) {
-            FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
-            stream(flowRuleService.getFlowEntries(deviceId))
-                    .filter(fe -> fe.appId() == appId.id())
-                    .forEach(ops::remove);
-            flowRuleService.apply(ops.build());
-        }
+                .forEach(deviceId -> {
+                    log.info("*** SRV6 - Starting initial set up for {}...", deviceId);
+                    this.setUpMySidTable(deviceId);
+                });
     }
 
     /**
