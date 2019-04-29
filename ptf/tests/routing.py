@@ -18,6 +18,23 @@
 #
 # To run all tests:
 #     make routing
+#
+# To run a specific test case:
+#     make routing.<TEST CLASS NAME>
+#
+# For example:
+#     make routing.IPv6RoutingTest
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Modify everywhere you see TODO
+#
+# When providing your solution, make sure to use the same names for P4Runtime
+# entities as specified in your P4Info file.
+#
+# Test cases are based on the P4 program design suggested in the exercises
+# README. Make sure to modify the test cases accordingly if you decide to
+# implement the pipeline differently.
 # ------------------------------------------------------------------------------
 
 from ptf.testutils import group
@@ -41,6 +58,8 @@ class IPv6RoutingTest(P4RuntimeTest):
 
         # Add table entry which handles packet with destination mac equals to router mac (my station mac)
         # Consider pkt's mac dst addr as my station address
+        # TODO EXERCISE 3
+        # Modify the table_name, match_field name and action_name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_my_station",
@@ -53,6 +72,8 @@ class IPv6RoutingTest(P4RuntimeTest):
         # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
+        # TODO EXERCISE 3
+        # Modify action profile name and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_act_prof_group(
             act_prof_name="FabricIngress.ecmp_selector",
@@ -65,6 +86,8 @@ class IPv6RoutingTest(P4RuntimeTest):
         # ---- END SOLUTION ----
 
         # Map pkt's IPv6 dst addr to group
+        # TODO EXERCISE 3
+        # Modify table name and match field name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l3_table",
@@ -77,6 +100,8 @@ class IPv6RoutingTest(P4RuntimeTest):
         # ---- END SOLUTION ----
 
         # Map next_hop_mac to output port
+        # TODO EXERCISE 3
+        # Modify table name, match field name and action to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",

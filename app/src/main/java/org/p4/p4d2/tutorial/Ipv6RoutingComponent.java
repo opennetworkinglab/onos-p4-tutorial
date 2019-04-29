@@ -185,8 +185,8 @@ public class Ipv6RoutingComponent {
         //       and there is only one action called *NoAction*
         String tableId = "FabricIngress.l2_my_station";
 
-        // TODO: create a match which matches my station mac address.
-        // HINT: uses *.matchExact* to match exact byte value of dst mac.
+        // TODO EXERCISE 3
+        // Fill the match field and action to match your P4Info file.
         // ---- START SOLUTION ----
         PiCriterion piMatch = PiCriterion.builder()
                 .matchExact(
@@ -220,16 +220,15 @@ public class Ipv6RoutingComponent {
     private GroupDescription createNextHopGroup(
             int groupId, Collection<MacAddress> nextHopMacs, DeviceId deviceId) {
 
-        // TODO: Fill Ids.
-        // HINT: this method creates an group for *l3_table* and uses
-        //       *ecmp_selector* action profile group to do ECMP.
+        // TODO EXERCISE 3
+        // Fill the tableId and action profileId to match your P4Info file.
         String tableId = "FabricIngress.l3_table";
         String actionProfileId = "FabricIngress.ecmp_selector";
 
         final List<PiAction> actions = Lists.newArrayList();
         for (MacAddress nextHopMac : nextHopMacs) {
-            // TODO: Create a list of actions for each next hop.
-            // HINT: add action and action parameter
+            // TODO EXERCISE 3
+            // Fill the action id and action parameter id to match your P4Info.
             // ---- START SOLUTION ----
             PiAction action = PiAction.builder()
                     // TODO: add code here
@@ -259,8 +258,8 @@ public class Ipv6RoutingComponent {
             DeviceId deviceId, Ip6Prefix ip6Prefix, int groupId) {
         String tableId = "FabricIngress.l3_table";
 
-        // TODO: Create a match for IPv6 address with LPM.
-        // HINT: use *matchLpm* to match LPM
+        // TODO EXERCISE 3
+        // Fill the match field id to match your P4Info file.
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 // TODO: add code here
@@ -269,8 +268,6 @@ public class Ipv6RoutingComponent {
                         ip6Prefix.prefixLength())
                 .build();
 
-        // TODO: Create a action which sets the action profile group ID
-        // HINT: you can use *PiActionProfileGroupId.of(id);* to create group action
         PiTableAction action = PiActionProfileGroupId.of(groupId);
         // ---- END SOLUTION ----
 
@@ -293,18 +290,16 @@ public class Ipv6RoutingComponent {
         String tableId = "FabricIngress.l2_exact_table";
 
         // ---- START SOLUTION ----
-        // FIXME TODO: create a match which matches destination mac to next hop
+        // TODO EXERCISE 3
+        // Fill the match field id to match your P4Info file.
         PiCriterion match = PiCriterion.builder()
-                // TODO: add code here
                 .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
                             nexthopMac.toBytes())
                 .build();
 
-        // TODO: create an action which sets the output port
-        // HINT: use *withId* method to set action id and use *withParameter*
-        //       to set action parameter
+        // TODO EXERCISE 3
+        // Fill action id and parameter to match your P4Info file
         PiAction action = PiAction.builder()
-                // TODO: add code here
                 .withId(PiActionId.of("FabricIngress.set_output_port"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("port_num"), outPort.toLong()))

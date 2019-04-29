@@ -1,10 +1,22 @@
 ## Exercise 3: IPv6 routing
 
 In this exercise, you will be adding some tables that will perform IPv6
-routing of packets between the switches in your topology.
+routing of packets based on the topology and network configuration.
 
-Adding tables for IPv6 routing
-----
+## The network configuration
+
+The [netcfg.json](netcfg.json) includes device, host, and interface configuration.
+
+In `devices` section of the config, you can find `srv6DeviceConfig` part which includes three attributes
+fot our tutorial application:
+
+ - myStationMac: This is the mac address of the device, a.k.a. router mac address, we will use this attribute in this App.
+ - mySid: The IPv6 address of the device, for segment routing application.
+ - isSpine: determine that the switch is a leaf or spine in this topology.
+
+## Exercise steps
+
+### 1.Adding tables for IPv6 routing
 
 The first step will be to add the new tables to `main.p4`.
 
@@ -30,7 +42,7 @@ your L3 table.
 
 You may realize that at this point that the switch will perform IPv6 routing
 nondiscriminately, which is technically incorrect. The switch should only route
-Ethernet frames that are destined for the router's Ethernet address.
+Ethernet frames that are destined for the router's Ethernet address(the `myStationMac` from network config).
 
 To address this issue, you will need to create a table that will match the destination
 Ethernet address and mark the packet for routing if there is a match.
@@ -59,131 +71,37 @@ Make sure to address any compiler errors before continuing.
 
 At this point, our P4 pipeline should be ready for testing.
 
-Testing the pipeline with Packet Test Framework (PTF)
-----
+### 2.Testing the pipeline with Packet Test Framework (PTF)
 
-In this exercise,
-you will be add test codes to [routing.py](ptf/tests/routing.py) to verify the routing
+In this step, you will be add test codes to [routing.py](ptf/tests/routing.py) to verify the routing
 the behavior of the pipeline.
 
 In the `IPv6RoutingTest` we test three different types of a packet: TCPv6, UDPv6, and ICMPv6
 
 Those packets includes sample Ethernet, IPv6 headers and payload.
-The test program will send packets to first port of test switch,
+The test program will send packets to first port (port 1) of test switch,
 and we expect the switch routes the packet to the next hop, which performs actions below:
 
- 1. Check if destination mac is the router mac(my station mac)
- 2. Modify the mac address
-    - source mac becomes to router mac(my station mac)
-    - destination mac becomes to next hop mac address
- 3. Decrement the TTL/HLIM of IP header
- 4. Send the packet out to a port
+ 1. Check if destination mac address is the device mac(`myStationMac` from network config).
+ 2. Modify the mac address.
+    - modify the source mac address to device mac.
+    - modify the destination mac address to next hop mac address (can be another device mac or a host).
+ 3. Decrement the TTL/hop-limit of the IP header.
+ 4. Send the packet out to a port according to destination mac address.
 
-Now we can try the PTF test for routing without any modification.
+You should be able to find `TODO EXERCISE 3` in [routing.py](ptf/tests/routing.py).
 
-To run the test for routing, enter the `ptf` directory and use following command:
+The first one is to program the table which checks the destination mac address.
 
-```bash
-make routing
-```
+The second one is to add an action profile group for setting the next hop mac address.
 
-you should see message like:
+The third one is to add a table entry which matches the IP prefix and point to the action profile group we just created.
 
-```
-========== EXPECTED ==========
-.... Skip ....
-========== RECEIVED ==========
-0 total packets.
-==============================
-.... Skip ....
-ATTENTION: SOME TESTS DID NOT PASS!!!
-```
-
-This message means there is no packet received by the test program.
-We need to add some table entries and groups to make it works.
-
-The first step is to program the table which checks the destination mac address.
-
-To build the table entry, use `self.helper.build_table_entry` method and use `self.insert()`
-to insert the table entry to the test device.
-
- - Hint: we can match destination mac of the packet directly in the table entry
- - Hint2: we can get destination mac of the packet with `pkt[Ether].dst`
-
-After adding the code, the device should be able to process the packet with
-destination mac address which equals to the router mac.
-
-The test won't pass at this time. However, we can check trace log from BMv2 to see
-how the packet been processed by the pipeline.
-
-You can find trace log of Bmv2 switch here: `/tmp/bmv2-ptf.log`
-
-In the trace log, you should be able to find messages like:
-
-```
-Applying table '<Table name>'
-... skip ...
-Table '<table name>': hit with handle xxxxxxxx
-```
-
-This means the packet sent by PTF hit the table we just created.
-
-The next step is to add an ECMP group for routing, you can create and insert an
-action profile group by using the code below:
-
-```python
-# Create an action profile group with a list of actions
-action_prof_group = self.helper.build_act_prof_group(
-    act_prof_name="<Action Profile Name>",
-    group_id=<Group Id>,
-    actions=[
-        # List of tuples (action name, action param dict)
-        ("<Action1 name>", {"<Param1 name>": <Param1 val>...}),
-        ("<Action2 name>", {"<Param1 name>": <Param1 val>...}),
-        ...
-    ]
-)
-# Insert action profile group
-self.insert(action_prof_group)
-```
-
-We can create a group with a single member which sets next hop address we expected (`next_hop_mac`)
-
-After the group creation, we can add a table entry which points to this group.
-To create a table entry which associate to a group, you can use the code below:
-
-```python
-table_entry = self.helper.build_table_entry(
-    table_name="<Table Name>",
-    match_fields={
-        "<Match Field>": <Match Value>
-    },
-    group_id=<GROUP Id>
-)
-```
-
-This table entry should be able to handle IPv6 routing, which matches the IPv6 prefix and set the next hop.
-
- - HINT: you can match destination IPv6 of the packet directly in the table entry
- - HINT2: you can get the destination IPv6 of the packet by `pkt[IPv6].dst`
- - HINT3: to match value with a prefix length (LPM), uses tuple `(value, prefix length)` as the value of match field
-
-After this table entry and group installed, we should see the message from BMv2 trace log like:
-
-```
-Applying table '<Your routing table name>'
-... skip ...
-Table '<Your routing table name>': hit with handle xxxxxxxx
-... skip ...
-Action entry is <Action name> - <Action parameter>
-```
-
-The last thing we miss is the table which handles the packet with next hop destination mac.
-
-We expected to receive the packet from second port of the switch.
+The last one is the table which handles the packet with next hop destination mac.
+We expected to receive the packet from second port (port 2) of the switch.
 This can be done by using the bridging table, see [EXERCISE-2.md](EXERCISE-2.md)
 
-We should be able to see the following message if the test runs correctly:
+After finish all `TODO` we should be able to run the test and see the following messages:
 
 ```
 routing.IPv6RoutingTest ... tcpv6 ... udpv6 ... icmpv6 ... ok
@@ -196,37 +114,29 @@ OK
 
 Now we have shown that we can install basic rules and pass traffic using BMv2.
 
-Developing the ONOS routing app
-----
+### 3.Developing the ONOS routing app
 
 The last part of the exercise is to update the starter code for the routing exercise,
 located here: `tutorial/app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`.
 
-This session will focus on adding support for routing of IPv6 packets between
-different ToR switches.
-
-Students will have to modify their P4 program and
-ONOS app to handle IPv6 NDP Router Advertisement and Solicitation
-messages, as well as programming of P4 table entries and action profile
-groups to route packets across the fabric, using ECMP to distribute traffic
-between multiple spines.
+This session will focus on adding support for routing of IPv6 packets.
 
 First is to modify the `setUpMyStationTable` method to insert a rule that
-matches the router's Ethernet address and insert it into your my station table.
+matches the router's Ethernet address(`myStationMac` from network config) and insert it into your my station table.
 
-This method will be called when a device is added and the device is available, and get router(my station) mac address
+This method will be called when a device is added and the device is available, and get device mac address
 from network configuration. (See `InternalDeviceListener` class)
 
-After completed the method and reload the application (`app-reload`), you should be able to get related flows from ONOS
-command line:
+After completed the method and reload the application (`make app-build && make app-reload`), 
+you should be able to get related flows from ONOS command line:
 
 ```
 sdn@root > flows -s
 ... skip ...
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
 ... skip ...
 ```
 
@@ -236,7 +146,7 @@ Second, complete three method below to provide routing with ECMP.
 
 These three methods will be called when a link or a host which connected to this device is up. 
 
-#### createNextHopGroup
+#### The createNextHopGroup method
 
 The `createNextHopGroup` creates an group with given group ID and collection of next hop mac address.
 
@@ -247,11 +157,39 @@ Once a group member has selected, the device will perform the action, which sets
 
 You goal is to create members(actions) for this group to set the next hop address to the packet.
 
-#### createRoutingRule
+The flows will be looks like:
+
+```
+onos> groups
+... skip ...
+deviceId=device:bmv2:leaf1, groupCount=7
+   # This is a group which set next hop to spines
+   id=0xec3b0000, state=ADDED, type=SELECT, bytes=0, packets=0, appId=org.p4.srv6-tutorial, referenceCount=0
+       id=0xec3b0000, bucket=1, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0xbb00000002)]
+       id=0xec3b0000, bucket=2, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0xbb00000001)]
+   # This is a group which set next hop to the host (host h1a)
+   id=0x1a, state=ADDED, type=SELECT, bytes=0, packets=0, appId=org.p4.srv6-tutorial, referenceCount=0
+       id=0x1a, bucket=1, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0x1a)]
+... skip ...
+```
+
+#### The createRoutingRule method
 
 The `createRoutingRule` creates the routing rule with given IPv6 prefix and group ID we used from previous method.
 
-#### createNextHopRule
+```
+onos> flows -s
+deviceId=device:bmv2:leaf1, flowRuleCount=25
+... skip ...
+# These are flows which sends packet through spines
+    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x20010001000300000000000000000000/64], treatment=[immediate=[GROUP:0xec3b0000]]
+    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x20010001000400000000000000000000/64], treatment=[immediate=[GROUP:0xec3b0000]]
+# A flow which route a packet to host
+    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x2001000100010000000000000000000a/128], treatment=[immediate=[GROUP:0x1a]]
+... skip ...
+```
+
+#### The createNextHopRule method
 
 The `createNextHopRule` method which creates L2 rules for next hop. This method is used to set output port according to 
 the destination address. We already have similar method in `L2BridgingComponent` (see `learnHost` method).
@@ -267,7 +205,7 @@ simply use `hosts` command in ONOS CLI (or `hosts -s` for simple one).
 
 There should be six hosts:
 ```
-sdn@root > hosts -s
+onos> hosts -s
 id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:bmv2:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
 id=00:00:00:00:00:1B/None, mac=00:00:00:00:00:1B, locations=[device:bmv2:leaf1/4], vlan=None, ip(s)=[2001:1:1::b]
 id=00:00:00:00:00:1C/None, mac=00:00:00:00:00:1C, locations=[device:bmv2:leaf1/5], vlan=None, ip(s)=[2001:1:1::c]
@@ -276,7 +214,7 @@ id=00:00:00:00:00:30/None, mac=00:00:00:00:00:30, locations=[device:bmv2:leaf2/3
 id=00:00:00:00:00:40/None, mac=00:00:00:00:00:40, locations=[device:bmv2:leaf2/4], vlan=None, ip(s)=[2001:1:4::1]
 ```
 
-If you cannot find any host from ONOS CLI, try use the host to send some NDP packet so the controller can learn it.
+**If you cannot find any host** from ONOS CLI, try use the host to send some NDP packet so the controller can learn it.
 The easiest way to sent NDP packet is to ping another hosts with `ping` command, by default the host should send 
 a *Router Solicitation* or *Neighbor Solicitation* message and those message will be captured by the controller.
 
@@ -292,25 +230,7 @@ PING 2001:1:1::a(2001:1:1::a) 56 data bytes
 64 bytes from 2001:1:1::a: icmp_seq=6 ttl=63 time=1.01 ms
 ```
 
-Some troubleshooting tips
-----
+### Congratulations!
 
- - Use `make reset` to cleanup everything.
-
-### PTF:
-
- - Log for PTF is located at `tutorial/ptf/ptf.log`
- - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
-
-#### Mininet:
-
- - Sometimes the software switch may crash, restart the Mininet topology should fix this problem.
- - If something goes wrong and the Mininet does not cleanup correctly, use `sudo mn -c` to cleanup, and make sure 
-   there is no other software switch running before restart the topology (check with `ps aux | grep bmv2`).
- - All switch log can be found at `/tmp` directory.
-
-#### ONOS:
-
- - Use `log:tail` ONOS command to get latest ONOS log
- - If you cannot access ONOS shell, please check if the ONOS process is running or not (check with `ps aux | grep bmv2`).
+You have completed the third exercise. You can now move to the next one.
 
