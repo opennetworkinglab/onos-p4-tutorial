@@ -210,7 +210,7 @@ You can confirm that your rule has been added using a variant of the following:
 (HINT: Make sure to update the tableId to match the one in your P4 program.)
 ```
 FIXME
-sdn@root > flows any device:bmv2:leaf1 | grep tableId=FabricIngress.srv6_transit
+sdn@root > flows any device:leaf1 | grep tableId=FabricIngress.srv6_transit
     id=c40000e582112b, state=ADDED, bytes=0, packets=0, duration=169, liveType=UNKNOWN, priority=10, tableId=FabricIngress.srv6_transit, appId=org.p4.srv6-tutorial.srv6, selector=[hdr.ipv6.dst_addr=0x20010001000300000000000000000001/128], treatment=DefaultTrafficTreatment{immediate=[FabricIngress.srv6_t_insert_3(s3=0x20010001000300000000000000000001, s1=0x20020000000000000000000000000001, s2=0x20010000000000000000000000000002)], deferred=[], transition=None, meter=[], cleared=false, StatTrigger=null, metadata=null}
 ```
 
