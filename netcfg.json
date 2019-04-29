@@ -8,7 +8,7 @@
       },
       "srv6DeviceConfig": {
         "myStationMac": "00:aa:00:00:00:01",
-        "mySid": "2001::1",
+        "mySid": "3:101:2::",
         "isSpine": false
       }
     },
@@ -20,7 +20,7 @@
       },
       "srv6DeviceConfig": {
         "myStationMac": "00:aa:00:00:00:02",
-        "mySid": "2001::2",
+        "mySid": "3:102:2::",
         "isSpine": false
       }
     },
@@ -32,7 +32,7 @@
       },
       "srv6DeviceConfig": {
         "myStationMac": "00:bb:00:00:00:01",
-        "mySid": "2002::1",
+        "mySid": "3:201:2::",
         "isSpine": true
       }
     },
@@ -44,7 +44,7 @@
       },
       "srv6DeviceConfig": {
         "myStationMac": "00:bb:00:00:00:02",
-        "mySid": "2002::2",
+        "mySid": "3:202:2::",
         "isSpine": true
       }
     }
