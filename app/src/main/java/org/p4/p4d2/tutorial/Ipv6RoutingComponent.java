@@ -598,7 +598,8 @@ public class Ipv6RoutingComponent {
                 default:
                     return false;
             }
-
+            // Process device event if this controller instance is the master
+            // for the device and the device is available.
             DeviceId deviceId = event.subject().id();
             return mastershipService.isLocalMaster(deviceId) &&
                     deviceService.isAvailable(event.subject().id());
