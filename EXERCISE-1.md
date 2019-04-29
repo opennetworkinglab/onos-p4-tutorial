@@ -122,14 +122,15 @@ When running PTF tests, multiple files are produced that you can use to spot bug
 ### 3. Modify ONOS pipeline interpreter
 
 The `PipelineInterpreter` is the ONOS driver behavior used to map, among other
-things, the ONOS representation of packet-in/out, with one complaint with the P4
+things, the ONOS representation of packet-in/out, with one compliant with the P4
 implementation.
 
 Specifically, to use services like LLDP-based link discovery, ONOS built-in
 apps need to be able to set the output port of a packet-out and access the
 original ingress port of a packet-in.
 
-In the following, you will be asked to apply a few simple changes to the `PipelineInterpreter` implementation
+In the following, you will be asked to apply a few simple changes to the
+`PipelineInterpreter` implementation:
 
 1. Open file:
    `app/src/main/java/org/p4/p4d2/tutorial/pipeconf/InterpreterImpl.java`
