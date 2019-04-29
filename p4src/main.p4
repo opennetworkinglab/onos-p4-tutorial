@@ -200,18 +200,11 @@ control FabricIngress (inout parsed_headers_t hdr,
       }
     }
 
-    // Send immendiatelly to CPU - skip the rest of pipeline.
-    action punt_to_cpu() {
-        standard_metadata.egress_spec = CPU_PORT;
-        exit;
-    }
-
     action clone_to_cpu() {
         clone3(CloneType.I2E, CPU_CLONE_SESSION_ID, standard_metadata);
     }
 
     direct_counter(CounterType.packets_and_bytes) acl_counter;
-
     table acl {
         key = {
             standard_metadata.ingress_port: ternary;
@@ -224,7 +217,6 @@ control FabricIngress (inout parsed_headers_t hdr,
             fabric_metadata.l4_dst_port: ternary;
         }
         actions = {
-            punt_to_cpu;
             clone_to_cpu;
             drop;
         }
@@ -279,6 +271,7 @@ control FabricIngress (inout parsed_headers_t hdr,
                 l2_ternary_table.apply();
             }
         }
+
         acl.apply();
     }
 }
@@ -287,10 +280,19 @@ control FabricEgress (inout parsed_headers_t hdr,
                       inout fabric_metadata_t fabric_metadata,
                       inout standard_metadata_t standard_metadata) {
     apply {
+        // TODO EXERCISE 1
+        // Implement logic such that if the packet is to be forwarded to the CPU
+        // port, i.e. we requested a packet-in in the ingress pipeline
+        // (standard_metadata.egress_port == CPU_PORT):
+        // 1. Set packet_in header as valid
+        // 2. Set the packet_in.ingress_port field to the original packet's
+        //    ingress port (standard_metadata.ingress_port).
+        // ---- START SOLUTION ----
         if (standard_metadata.egress_port == CPU_PORT) {
             hdr.packet_in.setValid();
             hdr.packet_in.ingress_port = standard_metadata.ingress_port;
         }
+        // ---- END SOLUTION ----
 
         if (fabric_metadata.is_multicast == _TRUE
              && standard_metadata.ingress_port == standard_metadata.egress_port) {

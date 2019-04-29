@@ -75,7 +75,10 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 /**
  * Application which handles IPv6 routing.
  */
-@Component(immediate = true)
+@Component(
+        immediate = true,
+        enabled = true
+)
 public class Ipv6RoutingComponent {
 
     private static final Logger log = LoggerFactory.getLogger(Ipv6RoutingComponent.class);

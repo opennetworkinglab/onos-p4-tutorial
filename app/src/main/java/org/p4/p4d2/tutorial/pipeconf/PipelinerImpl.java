@@ -17,24 +17,33 @@
 package org.p4.p4d2.tutorial.pipeconf;
 
 import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
 import org.onosproject.net.behaviour.NextGroup;
 import org.onosproject.net.behaviour.Pipeliner;
 import org.onosproject.net.behaviour.PipelinerContext;
 import org.onosproject.net.driver.AbstractHandlerBehaviour;
 import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.instructions.Instructions;
 import org.onosproject.net.flowobjective.FilteringObjective;
 import org.onosproject.net.flowobjective.ForwardingObjective;
 import org.onosproject.net.flowobjective.NextObjective;
 import org.onosproject.net.flowobjective.ObjectiveError;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupService;
+import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiTableId;
+import org.onosproject.net.pi.runtime.PiAction;
+import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.p4.p4d2.tutorial.AppConstants.ACL_TABLE;
+import static org.onosproject.net.flow.instructions.Instruction.Type.OUTPUT;
+import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -43,9 +52,14 @@ import static org.slf4j.LoggerFactory.getLogger;
  */
 public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner {
 
+    // From the P4Info file
+    private static final String ACL_TABLE = "FabricIngress.acl";
+    private static final String CLONE_TO_CPU = "FabricIngress.clone_to_cpu";
+
     private final Logger log = getLogger(getClass());
 
     private FlowRuleService flowRuleService;
+    private GroupService groupService;
     private DeviceId deviceId;
 
 
@@ -53,7 +67,7 @@ public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner
     public void init(DeviceId deviceId, PipelinerContext context) {
         this.deviceId = deviceId;
         this.flowRuleService = context.directory().get(FlowRuleService.class);
-
+        this.groupService = context.directory().get(GroupService.class);
     }
 
     @Override
@@ -67,14 +81,32 @@ public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner
             obj.context().ifPresent(c -> c.onError(obj, ObjectiveError.UNSUPPORTED));
         }
 
-        // Simply create an equivalent FlowRule for table 0.
+        // Whether this objective specifies an OUTPUT:CONTROLLER instruction.
+        final boolean hasCloneToCpuAction = obj.treatment()
+                .allInstructions().stream()
+                .filter(i -> i.type().equals(OUTPUT))
+                .map(i -> (Instructions.OutputInstruction) i)
+                .anyMatch(i -> i.port().equals(PortNumber.CONTROLLER));
+
+        if (!hasCloneToCpuAction) {
+            // We support only objectives for clone to CPU behaviours (e.g. for
+            // host and link discovery)
+            obj.context().ifPresent(c -> c.onError(obj, ObjectiveError.UNSUPPORTED));
+        }
+
+        // Create an equivalent FlowRule with same selector and clone_to_cpu action.
+        final PiAction cloneToCpuAction = PiAction.builder()
+                .withId(PiActionId.of(CLONE_TO_CPU))
+                .build();
+
         final FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()
                 .forTable(PiTableId.of(ACL_TABLE))
                 .forDevice(deviceId)
                 .withSelector(obj.selector())
                 .fromApp(obj.appId())
                 .withPriority(obj.priority())
-                .withTreatment(obj.treatment());
+                .withTreatment(DefaultTrafficTreatment.builder()
+                                       .piTableAction(cloneToCpuAction).build());
 
         if (obj.permanent()) {
             ruleBuilder.makePermanent();
@@ -82,12 +114,22 @@ public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner
             ruleBuilder.makeTemporary(obj.timeout());
         }
 
+        final GroupDescription cloneGroup = Utils.forgeCloneGroup(
+                obj.appId(),
+                deviceId,
+                CPU_CLONE_SESSION_ID,
+                // Ports where to clone the packet.
+                // Just controller in this case.
+                Collections.singleton(PortNumber.CONTROLLER));
+
         switch (obj.op()) {
             case ADD:
                 flowRuleService.applyFlowRules(ruleBuilder.build());
+                groupService.addGroup(cloneGroup);
                 break;
             case REMOVE:
                 flowRuleService.removeFlowRules(ruleBuilder.build());
+                groupService.removeGroup(deviceId, cloneGroup.appCookie(), obj.appId());
                 break;
             default:
                 log.warn("Unknown operation {}", obj.op());

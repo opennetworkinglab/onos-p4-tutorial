@@ -64,7 +64,10 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  * App component that configures devices to generate NDP Neighbor Advertisement
  * packets for all interface IPv6 addresses configured in the netcfg.
  */
-@Component(immediate = true)
+@Component(
+        immediate = true,
+        enabled = true
+)
 public class NdpReplyComponent {
 
     private static final Logger log =

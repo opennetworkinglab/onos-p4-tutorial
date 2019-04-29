@@ -17,6 +17,7 @@
 package org.p4.p4d2.tutorial.pipeconf;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.onlab.packet.DeserializationException;
 import org.onlab.packet.Ethernet;
 import org.onlab.util.ImmutableByteSequence;
@@ -28,11 +29,9 @@ import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.driver.AbstractHandlerBehaviour;
 import org.onosproject.net.flow.TrafficTreatment;
 import org.onosproject.net.flow.criteria.Criterion;
-import org.onosproject.net.flow.instructions.Instruction;
 import org.onosproject.net.packet.DefaultInboundPacket;
 import org.onosproject.net.packet.InboundPacket;
 import org.onosproject.net.packet.OutboundPacket;
-import org.onosproject.net.pi.model.PiActionId;
 import org.onosproject.net.pi.model.PiMatchFieldId;
 import org.onosproject.net.pi.model.PiPacketMetadataId;
 import org.onosproject.net.pi.model.PiPipelineInterpreter;
@@ -44,6 +43,7 @@ import org.onosproject.net.pi.runtime.PiPacketOperation;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static java.lang.String.format;
@@ -54,14 +54,7 @@ import static org.onosproject.net.PortNumber.FLOOD;
 import static org.onosproject.net.flow.instructions.Instruction.Type.OUTPUT;
 import static org.onosproject.net.flow.instructions.Instructions.OutputInstruction;
 import static org.onosproject.net.pi.model.PiPacketOperationType.PACKET_OUT;
-import static org.p4.p4d2.tutorial.AppConstants.ACL_TABLE;
-import static org.p4.p4d2.tutorial.AppConstants.CLONE_TO_CPU;
 import static org.p4.p4d2.tutorial.AppConstants.CPU_PORT_ID;
-import static org.p4.p4d2.tutorial.AppConstants.CRITERION_MAP;
-import static org.p4.p4d2.tutorial.AppConstants.DROP_ACTION;
-import static org.p4.p4d2.tutorial.AppConstants.EGRESS_PORT_CTRL_METADATA;
-import static org.p4.p4d2.tutorial.AppConstants.INGRESS_PORT_CTRL_METADATA;
-import static org.p4.p4d2.tutorial.AppConstants.NO_ACTION;
 
 
 /**
@@ -70,54 +63,40 @@ import static org.p4.p4d2.tutorial.AppConstants.NO_ACTION;
 public class InterpreterImpl extends AbstractHandlerBehaviour
         implements PiPipelineInterpreter {
 
-    private static final int PORT_BITWIDTH = 9;
 
-    @Override
-    public PiAction mapTreatment(TrafficTreatment treatment, PiTableId piTableId)
-            throws PiInterpreterException {
-        if (!piTableId.id().equals(ACL_TABLE)) {
-            throw new PiInterpreterException(
-                    "Treatment mapping not supported for table " + piTableId);
-        }
+    // From v1model.p4
+    private static final int V1MODEL_PORT_BITWIDTH = 9;
 
-        if (treatment.allInstructions().isEmpty()) {
-            // Zero instructions means drop.
-            return PiAction.builder().withId(PiActionId.of(DROP_ACTION)).build();
-        } else if (treatment.allInstructions().size() > 1) {
-            // We understand treatments with only 1 instruction.
-            throw new PiInterpreterException("Treatment has too many instructions");
-        }
+    // From P4Info.
+    private static final Map<Criterion.Type, String> CRITERION_MAP =
+            new ImmutableMap.Builder<Criterion.Type, String>()
+                    .put(Criterion.Type.IN_PORT, "standard_metadata.ingress_port")
+                    .put(Criterion.Type.ETH_DST, "hdr.ethernet.dst_addr")
+                    .put(Criterion.Type.ETH_SRC, "hdr.ethernet.src_addr")
+                    .put(Criterion.Type.ETH_TYPE, "hdr.ethernet.ether_type")
+                    .put(Criterion.Type.IPV6_DST, "hdr.ipv6.dst_addr")
+                    .put(Criterion.Type.IP_PROTO, "fabric_metadata.ip_proto")
+                    .put(Criterion.Type.ICMPV4_TYPE, "fabric_metadata.icmp_type")
+                    .put(Criterion.Type.ICMPV6_TYPE, "fabric_metadata.icmp_type")
+                    .build();
 
-        Instruction instruction = treatment.allInstructions().get(0);
-        switch (instruction.type()) {
-            case OUTPUT:
-                PortNumber port = ((OutputInstruction) instruction).port();
-                if (port.equals(CONTROLLER)) {
-                    // FIXME: modify hostprovider and packet requests to install
-                    //  clone to CPU rules.
-                    final PiActionId actionId = PiActionId.of(CLONE_TO_CPU);
-                    // final PiActionId actionId = treatment.clearedDeferred()
-                    //         ? FABRIC_INGRESS_PUNT_TO_CPU
-                    //         : FABRIC_INGRESS_CLONE_TO_CPU;
-                    return PiAction.builder().withId(actionId).build();
-                }
-                break;
-            case NOACTION:
-                return PiAction.builder().withId(PiActionId.of(NO_ACTION)).build();
-            default:
-                break;
-        }
-        throw new PiInterpreterException(format(
-                "Treatment mapping not supported for instruction %s", instruction));
-    }
-
+    /**
+     * Returns a collection of PI packet operations populated with metadata
+     * specific for this pipeconf and equivalent to the given ONOS
+     * OutboundPacket instance.
+     *
+     * @param packet ONOS OutboundPacket
+     * @return collection of PI packet operations
+     * @throws PiInterpreterException if the packet treatments cannot be
+     *                                executed by this pipeline
+     */
     @Override
     public Collection<PiPacketOperation> mapOutboundPacket(OutboundPacket packet)
             throws PiInterpreterException {
         TrafficTreatment treatment = packet.treatment();
 
-        // Packet-out in srv6.p4 supports only setting the output port,
-        // i.e. OUTPUT instructions.
+        // Packet-out in main.p4 supports only setting the output port,
+        // i.e. we only understand OUTPUT instructions.
         List<OutputInstruction> outInstructions = treatment
                 .allInstructions()
                 .stream()
@@ -134,72 +113,112 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         for (OutputInstruction outInst : outInstructions) {
             if (outInst.port().isLogical() && !outInst.port().equals(FLOOD)) {
                 throw new PiInterpreterException(format(
-                        "Packet-out on logical port '%s' not supported", outInst.port()));
+                        "Packet-out on logical port '%s' not supported",
+                        outInst.port()));
             } else if (outInst.port().equals(FLOOD)) {
                 // To emulate flooding, we create a packet-out operation for
                 // each switch port.
                 final DeviceService deviceService = handler().get(DeviceService.class);
                 for (Port port : deviceService.getPorts(packet.sendThrough())) {
-                    builder.add(createPacketOp(packet.data(), port.number().toLong()));
+                    builder.add(buildPacketOut(packet.data(), port.number().toLong()));
                 }
             } else {
-                // Singleton port.
-                builder.add(createPacketOp(packet.data(), outInst.port().toLong()));
+                // Create only one packet-out for the given OUTPUT instruction.
+                builder.add(buildPacketOut(packet.data(), outInst.port().toLong()));
             }
         }
         return builder.build();
     }
 
-    @Override
-    public InboundPacket mapInboundPacket(PiPacketOperation packetIn, DeviceId deviceId)
+    /**
+     * Builds a pipeconf-specific packet-out instance with the given payload and
+     * egress port.
+     *
+     * @param pktData    packet payload
+     * @param portNumber egress port
+     * @return packet-out
+     * @throws PiInterpreterException if packet-out cannot be built
+     */
+    private PiPacketOperation buildPacketOut(ByteBuffer pktData, long portNumber)
             throws PiInterpreterException {
 
-        Ethernet ethPkt;
+        // Make sure port number can fit in v1model port metadata bitwidth.
+        final ImmutableByteSequence portBytes;
         try {
-            ethPkt = Ethernet.deserializer().deserialize(
-                    packetIn.data().asArray(), 0, packetIn.data().size());
-        } catch (DeserializationException dex) {
-            throw new PiInterpreterException(dex.getMessage());
-        }
-
-        // Returns the ingress port packet metadata.
-        Optional<PiPacketMetadata> packetMetadata = packetIn.metadatas()
-                .stream().filter(m -> m.id().id().equals(INGRESS_PORT_CTRL_METADATA))
-                .findFirst();
-
-        if (packetMetadata.isPresent()) {
-            ImmutableByteSequence portByteSequence = packetMetadata.get().value();
-            short s = portByteSequence.asReadOnlyBuffer().getShort();
-            ConnectPoint receivedFrom = new ConnectPoint(deviceId, PortNumber.portNumber(s));
-            ByteBuffer rawData = ByteBuffer.wrap(packetIn.data().asArray());
-            return new DefaultInboundPacket(receivedFrom, ethPkt, rawData);
-        } else {
-            throw new PiInterpreterException(format(
-                    "Missing metadata '%s' in packet-in received from '%s': %s",
-                    INGRESS_PORT_CTRL_METADATA, deviceId, packetIn));
-        }
-    }
-
-    private PiPacketOperation createPacketOp(ByteBuffer data, long portNumber)
-            throws PiInterpreterException {
-        PiPacketMetadata metadata = createPacketMetadata(portNumber);
-        return PiPacketOperation.builder()
-                .withType(PACKET_OUT)
-                .withData(copyFrom(data))
-                .withMetadatas(ImmutableList.of(metadata))
-                .build();
-    }
-
-    private PiPacketMetadata createPacketMetadata(long portNumber) throws PiInterpreterException {
-        try {
-            return PiPacketMetadata.builder()
-                    .withId(PiPacketMetadataId.of(EGRESS_PORT_CTRL_METADATA))
-                    .withValue(copyFrom(portNumber).fit(PORT_BITWIDTH))
-                    .build();
+            portBytes = copyFrom(portNumber).fit(V1MODEL_PORT_BITWIDTH);
         } catch (ImmutableByteSequence.ByteSequenceTrimException e) {
             throw new PiInterpreterException(format(
                     "Port number %d too big, %s", portNumber, e.getMessage()));
         }
+
+        // Create metadata instance for egress port.
+        // TODO: modify metadata names to match P4 program
+        // ---- START SOLUTION ----
+        final String outPortMetadataName = "egress_port";
+        // ---- END SOLUTION ----
+        final PiPacketMetadata outPortMetadata = PiPacketMetadata.builder()
+                .withId(PiPacketMetadataId.of(outPortMetadataName))
+                .withValue(portBytes)
+                .build();
+
+        // Build packet out.
+        return PiPacketOperation.builder()
+                .withType(PACKET_OUT)
+                .withData(copyFrom(pktData))
+                .withMetadata(outPortMetadata)
+                .build();
+    }
+
+    /**
+     * Returns an ONS InboundPacket equivalent to the given pipeconf-specific
+     * packet-in operation.
+     *
+     * @param packetIn packet operation
+     * @param deviceId ID of the device that originated the packet-in
+     * @return inbound packet
+     * @throws PiInterpreterException if the packet operation cannot be mapped
+     *                                to an inbound packet
+     */
+    @Override
+    public InboundPacket mapInboundPacket(PiPacketOperation packetIn, DeviceId deviceId)
+            throws PiInterpreterException {
+
+        // Find the ingress_port metadata.
+        // TODO: modify metadata names to match P4 program
+        // ---- START SOLUTION ----
+        final String inportMetadataName = "ingress_port";
+        // ---- END SOLUTION ----
+        Optional<PiPacketMetadata> inportMetadata = packetIn.metadatas()
+                .stream()
+                .filter(meta -> meta.id().id().equals(inportMetadataName))
+                .findFirst();
+
+        if (!inportMetadata.isPresent()) {
+            throw new PiInterpreterException(format(
+                    "Missing metadata '%s' in packet-in received from '%s': %s",
+                    inportMetadataName, deviceId, packetIn));
+        }
+
+        // Build ONOS InboundPacket instance with the given ingress port.
+
+        // 1. Parse packet-in object into Ethernet packet instance.
+        final byte[] payloadBytes = packetIn.data().asArray();
+        final ByteBuffer rawData = ByteBuffer.wrap(payloadBytes);
+        final Ethernet ethPkt;
+        try {
+            ethPkt = Ethernet.deserializer().deserialize(
+                    payloadBytes, 0, packetIn.data().size());
+        } catch (DeserializationException dex) {
+            throw new PiInterpreterException(dex.getMessage());
+        }
+
+        // 2. Get ingress port
+        final ImmutableByteSequence portBytes = inportMetadata.get().value();
+        final short portNum = portBytes.asReadOnlyBuffer().getShort();
+        final ConnectPoint receivedFrom = new ConnectPoint(
+                deviceId, PortNumber.portNumber(portNum));
+
+        return new DefaultInboundPacket(receivedFrom, ethPkt, rawData);
     }
 
     @Override
@@ -218,6 +237,12 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         } else {
             return Optional.empty();
         }
+    }
+
+    @Override
+    public PiAction mapTreatment(TrafficTreatment treatment, PiTableId piTableId)
+            throws PiInterpreterException {
+        throw new PiInterpreterException("Treatment mapping not supported");
     }
 
     @Override

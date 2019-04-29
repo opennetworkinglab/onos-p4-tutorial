@@ -56,7 +56,11 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 /**
  * Application which handles IPv6 routing.
  */
-@Component(immediate = true, service = Srv6Component.class)
+@Component(
+        immediate = true,
+        enabled = true,
+        service = Srv6Component.class
+)
 public class Srv6Component {
 
     private static final Logger log = LoggerFactory.getLogger(Srv6Component.class);
@@ -121,7 +125,8 @@ public class Srv6Component {
     //--------------------------------------------------------------------------
 
     /**
-     * Populate the My SID table from the network configuration for the specified device.
+     * Populate the My SID table from the network configuration for the
+     * specified device.
      *
      * @param deviceId the device Id
      */
@@ -132,8 +137,10 @@ public class Srv6Component {
         log.info("Adding mySid rule on {} (sid {})...", deviceId, mySid);
 
         PiCriterion match = PiCriterion.builder()
-                .matchTernary(PiMatchFieldId.of("hdr.ipv6.dst_addr"),
-                        mySid.toOctets(), Ip6Address.makeMaskPrefix(128).toOctets())
+                .matchTernary(
+                        PiMatchFieldId.of("hdr.ipv6.dst_addr"),
+                        mySid.toOctets(),
+                        Ip6Address.makeMaskPrefix(128).toOctets())
                 .build();
         PiTableAction action = PiAction.builder()
                 .withId(PiActionId.of("FabricIngress.srv6_end"))
@@ -148,7 +155,8 @@ public class Srv6Component {
     }
 
     /**
-     * Insert a SRv6 transit insert policy that will inject an SRv6 header for packets destined to destIp.
+     * Insert a SRv6 transit insert policy that will inject an SRv6 header for
+     * packets destined to destIp.
      *
      * @param deviceId     device ID
      * @param destIp       target IP address for the SRv6 policy
@@ -246,8 +254,8 @@ public class Srv6Component {
     //--------------------------------------------------------------------------
 
     /**
-     * Sets up SRv6 My SID table on all devices known by ONOS and for which this ONOS
-     * node instance is currently master.
+     * Sets up SRv6 My SID table on all devices known by ONOS and for which this
+     * ONOS node instance is currently master.
      */
     private synchronized void setUpAllDevices() {
         // Set up host routes

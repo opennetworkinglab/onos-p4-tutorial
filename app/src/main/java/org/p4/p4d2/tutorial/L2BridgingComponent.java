@@ -52,17 +52,18 @@ import org.p4.p4d2.tutorial.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.p4.p4d2.tutorial.AppConstants.CPU_CLONE_SESSION_ID;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 /**
  * App component that configures devices to provide L2 bridging capabilities.
  */
-@Component(immediate = true)
+@Component(
+        immediate = true,
+        enabled = true
+)
 public class L2BridgingComponent {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
@@ -145,38 +146,12 @@ public class L2BridgingComponent {
      * @param deviceId the device to set up
      */
     private void setUpDevice(DeviceId deviceId) {
-        // We need a clone group on all switches to clone LLDP packets for link
-        // discovery as well as ARP/NDP ones for host discovery.
-        insertCpuCloneGroup(deviceId);
-
         if (isSpine(deviceId)) {
             // Stope here. We support bridging only on leaf/tor switches.
             return;
         }
         insertMulticastGroup(deviceId);
         insertMulticastFlowRules(deviceId);
-    }
-
-    /**
-     * Inserts a CLONE group in the ONOS core to clone packets to the CPU (i.e.
-     * to ONOS via packet-in). CLONE groups in ONOS are equivalent to P4Runtime
-     * Packet Replication Engine (PRE) clone sessions.
-     *
-     * @param deviceId device where to install the clone session
-     */
-    private void insertCpuCloneGroup(DeviceId deviceId) {
-        log.info("Inserting CPU clone session on {}", deviceId);
-
-        // Ports where to clone the packet. Just controller in this case.
-        Set<PortNumber> clonePorts = Collections.singleton(PortNumber.CONTROLLER);
-
-        // Forge ONOS group object. Use the same CPU clone session ID as in the
-        // P4 program.
-        final GroupDescription cloneGroup = Utils.forgeCloneGroup(
-                appId, deviceId, CPU_CLONE_SESSION_ID, clonePorts);
-
-        // Insert.
-        groupService.addGroup(cloneGroup);
     }
 
     /**

@@ -133,7 +133,7 @@ class P4InfoHelper(object):
                         if m.id == id:
                             return m
         raise AttributeError(
-            "ControllerPacketMetadata '%r' has no metadata %r (check your P4Info)"
+            "ControllerPacketMetadata %r has no metadata %r (check your P4Info)"
             % (meta_type, name if name is not None else id))
 
     def get_match_field_id(self, table_name, match_field_name):
