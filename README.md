@@ -6,8 +6,8 @@ controlled using P4Runtime. The tutorial is organized around a sequence of
 hands-on exercises that show how to build a leaf-spine data center fabric based
 on a simplified version of Segment Routing over IPv6 (SRv6). Exercises will
 include activities such as:
- 
- * P4 implementation of basic forwarding behaviors (bridging and routing) as 
+
+ * P4 implementation of basic forwarding behaviors (bridging and routing) as
    well as SRv6
  * Writing P4 unit tests using the Packet Test Framework (PTF)
  * Implementing an ONOS app providing the fabric control plane
@@ -48,7 +48,7 @@ To work on the exercises you will need to clone this repo inside the VM:
     cd ~
     git clone https://github.com/opennetworkinglab/onos-p4-tutorial tutorial
 
-If the `tutorial` directory is already present, make sure to update its 
+If the `tutorial` directory is already present, make sure to update its
 content:
 
     cd ~/tutorial
@@ -60,7 +60,7 @@ ONOS uses SSH key-based authentication to access its command line interface
 (CLI). Before starting ONOS, generate public/private rsa key pair using the
 following command inside the VM:
 
-    ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' -q 
+    ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' -q
 
 ## Using an IDE to work on the exercises
 
@@ -78,7 +78,7 @@ This repo is structured as follows:
 
  * `p4src/` P4 implementation
  * `app/` ONOS app Java implementation
- * `mininet/` Mininet script to emulate a 2x2 leaf-spine fabric topology of 
+ * `mininet/` Mininet script to emulate a 2x2 leaf-spine fabric topology of
    `stratum_bmv2` devices
  * `ptf/` PTF-based unit tests
 
@@ -91,11 +91,12 @@ the exercises, here's a quick reference:
 | Make command       | Description                                            |
 |--------------------|------------------------------------------------------- |
 | `make p4`          | Builds the P4 program                                  |
-| `make test`        | Runs all PTF-based tests                               |
 | `make onos-run`    | Runs ONOS on the current terminal window               |
 | `make onos-cli`    | Access the ONOS command line interface (CLI)           |
-| `make app-reload`  | Builds and reload the SRv6 app in ONOS                 |
+| `make app-reload`  | Builds the tutorial app and pipeconf                   |
+| `make app-reload`  | Load the app in ONOS                                   |
 | `make topo`        | Starts the Mininet topology                            |
+| `make netcfg`      | Pushes netcfg.json file (network config) to ONOS       |
 | `make reset`       | Resets the tutorial environment                        |
 
 ## Exercises

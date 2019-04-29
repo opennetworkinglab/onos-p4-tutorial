@@ -122,7 +122,7 @@ class ONOSBmv2Switch(Switch):
 
     def __init__(self, name, json=None, debugger=False, loglevel="warn",
                  elogger=False, grpcport=None, cpuport=255, notifications=False,
-                 thriftport=None, netcfg=True, dryrun=False,
+                 thriftport=None, netcfg=False, dryrun=False,
                  pipeconf=DEFAULT_PIPECONF, pktdump=False, valgrind=False,
                  gnmi=False, portcfg=True, onosdevid=None, stratum=False,
                  **kwargs):
