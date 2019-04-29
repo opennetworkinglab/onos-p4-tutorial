@@ -7,7 +7,7 @@ and belonging to the same subnet.
 ## Overview
 
 The ONOS app assumes that hosts of a given subnet are all connected to the same
-leaf, and two interfaces of two different leafs cannot be configured with the
+leaf, and two interfaces of two different leaves cannot be configured with the
 same IPv6 subnet. In other words, L2 bridging is allowed only for hosts
 connected to the same leaf.
 
@@ -50,7 +50,7 @@ onos> hosts -s
 id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
 ```
 
-The host MAC address, as well as the location, and the IPv6 address, have been
+The host MAC address, as well as the location, and the IPv6 address have been
 learned by the `hostprovider` app by sniffing the NDP NS packet.
 
 ## Exercise steps
@@ -120,7 +120,7 @@ For example:
 
 **Check for regressions**
 
-To make sures the new changes are not breaking other features, make sure to run
+To make sure the new changes are not breaking other features, make sure to run
 tests of the previous exercises as well.
 
     make packetio
@@ -145,11 +145,11 @@ This app component defines two event listener located at the bottom of the
 connection of a new switch) and `InternalHostListener` for host events (e.g. new
 host discovered). These listeners in turn call methods like:
 
-* `setUpDevice()`: responsible of creating a multicast group for all host-facing
+* `setUpDevice()`: responsible for creating a multicast group for all host-facing
   ports and inserting flow rules for broadcast/multicast packets such as ARP and
   NDP messages;
 
-* `learnHost()`: responsible of inserting unicast L2 entries based on the
+* `learnHost()`: responsible for inserting unicast L2 entries based on the
   discovered host location.
 
 To support reloading the app implementation, these methods are also called at
@@ -163,13 +163,13 @@ determine whether a port is expected to be facing hosts or not, we look at the
 interface configuration in [netcfg.json](netcfg.json) file (look for the `ports`
 section of the JSON file).
 
-The starter code already provides implementation of the method
+The starter code already provides an implementation of the method
 `insertMulticastGroup()`, you are required to complete the implementation of two
 other methods, `insertMulticastFlowRules()` and `learnHost()`.
 
 #### Enable component
 
-Once you're confident you solution to the previous step should work, before
+Once you're confident your solution to the previous step should work, before
 building and reloading the app, remember to enable the component by setting the
 `enabled` flag on top of the class definition:
 
@@ -221,7 +221,7 @@ INFO  [L2BridgingComponent] Adding L2 unicast rule on device:leaf1 for host 00:0
 #### Understanding ONOS error logs
 
 Before trying your solution in Mininet, it's worth looking at the ONOS log for
-possible errors. There's mainly 2 types of errors that you might see when
+possible errors. There are mainly 2 types of errors that you might see when
 reloading the app:
 
 1. Write errors like removing a nonexistent entity or inserting one that
@@ -253,8 +253,8 @@ reloading the app:
     ```
    
     **Read carefully the error message and make changes to the app as needed.**
-    Chances are that your are using a table, match field, or action name that
-    does not exist in your P4Info. Check you P4Info file, modify, and reload the
+    Chances are that you are using a table, match field, or action name that
+    does not exist in your P4Info. Check your P4Info file, modify, and reload the
     app (`make app-build && make app-reload`).
 
 ### 4. Test L2 bridging on Mininet
@@ -274,7 +274,7 @@ PING 2001:1:1::b(2001:1:1::b) 56 data bytes
 
 Check the ONOS log, you should see messages related to the discovery of host
 `h1b` who is now receiving NDP NS messages from `h1a` and replying with NDP NA
-ones to ithem (remember that `h1a` was already discovered at the beginning of
+ones to them (remember that `h1a` was already discovered at the beginning of
 the exercise):
 
 ```
