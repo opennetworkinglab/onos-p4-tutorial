@@ -62,6 +62,8 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  */
 @Component(
         immediate = true,
+        // TODO EXERCISE 2
+        // Enable component (enabled = true)
         enabled = true
 )
 public class L2BridgingComponent {
@@ -147,7 +149,7 @@ public class L2BridgingComponent {
      */
     private void setUpDevice(DeviceId deviceId) {
         if (isSpine(deviceId)) {
-            // Stope here. We support bridging only on leaf/tor switches.
+            // Stop here. We support bridging only on leaf/tor switches.
             return;
         }
         insertMulticastGroup(deviceId);
@@ -158,21 +160,23 @@ public class L2BridgingComponent {
      * Inserts an ALL group in the ONOS core to replicate packets on all host
      * facing ports. This group will be used to broadcast all ARP/NDP requests.
      * <p>
-     * ALL groups in ONOS are equivalent to P4Runtime Packet Replication Engine
+     * ALL groups in ONOS are equivalent to P4Runtime packet replication engine
      * (PRE) Multicast groups.
      *
      * @param deviceId the device where to install the group
      */
     private void insertMulticastGroup(DeviceId deviceId) {
+
         // Replicate packets where we know hosts are attached.
         Set<PortNumber> ports = getHostFacingPorts(deviceId);
+
         if (ports.isEmpty()) {
             // Stop here.
             log.warn("Device {} has 0 host facing ports", deviceId);
             return;
         }
 
-        log.info("Creating multicast group with {} ports on {}",
+        log.info("Adding L2 multicast group with {} ports on {}...",
                  ports.size(), deviceId);
 
         // Forge group object.
@@ -188,20 +192,21 @@ public class L2BridgingComponent {
      * broadcast/multicast addresses (e.g. ARP requests, NDP Neighbor
      * Solicitation, etc.). Such packets should be processed by the multicast
      * group created before.
+     * <p>
+     * This method will be called at component activation for each device
+     * (switch) known by ONOS, and every time a new device-added event is
+     * captured by the InternalDeviceListener defined below.
      *
      * @param deviceId device ID where to install the rules
      */
     private void insertMulticastFlowRules(DeviceId deviceId) {
-        log.info("Inserting L2 multicast flow rules on {}...", deviceId);
 
-        // Action: set multicast group id
-        final PiAction setMcastGroupAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
-                .withParameter(new PiActionParam(
-                        PiActionParamId.of("gid"),
-                        DEFAULT_BROADCAST_GROUP_ID))
-                .build();
+        log.info("Adding L2 multicast rules on {}...", deviceId);
 
+        // TODO EXERCISE 2
+        // Modify P4Runtime entity names to match content of P4Info file (look
+        // for the fully qualified name of tables, match fields, and actions.
+        // ---- START SOLUTION ----
         // Match ARP request - Match exactly FF:FF:FF:FF:FF
         final PiCriterion macBroadcastCriterion = PiCriterion.builder()
                 .matchTernary(
@@ -218,31 +223,51 @@ public class L2BridgingComponent {
                         MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
                 .build();
 
-        //  Forge 2 flow rules for  the given table.
+        // Action: set multicast group id (the same used )
+        final PiAction setMcastGroupAction = PiAction.builder()
+                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
+                .withParameter(new PiActionParam(
+                        PiActionParamId.of("gid"),
+                        DEFAULT_BROADCAST_GROUP_ID))
+                .build();
+
+        //  Build 2 flow rules.
         final String tableId = "FabricIngress.l2_ternary_table";
+
         final FlowRule rule1 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 macBroadcastCriterion, setMcastGroupAction);
+
         final FlowRule rule2 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 ipv6MulticastCriterion, setMcastGroupAction);
+        // ---- END SOLUTION ----
 
-        // Insert.
+        // Insert rules.
         flowRuleService.applyFlowRules(rule1, rule2);
     }
 
     /**
      * Insert flow rules to forward packets to a given host located at the given
      * device and port.
+     * <p>
+     * This method will be called at component activation for each host known by
+     * ONOS, and every time a new host-added event is captured by the
+     * InternalHostListener defined below.
      *
-     * @param host     host object
+     * @param host     host instance
      * @param deviceId device where the host is located
      * @param port     port where the host is attached to
      */
     private void learnHost(Host host, DeviceId deviceId, PortNumber port) {
-        log.info("Adding L2 bridging rule on {} for host {} (port {})...",
+
+        log.info("Adding L2 unicast rule on {} for host {} (port {})...",
                  deviceId, host.id(), port);
 
+        // TODO EXERCISE 2
+        // Modify P4Runtime entity names to match content of P4Info file (look
+        // for the fully qualified name of tables, match fields, and actions.
+        // ---- START SOLUTION ----
         // Match exactly on the host MAC address.
         final MacAddress hostMac = host.mac();
         final PiCriterion hostMacCriterion = PiCriterion.builder()
@@ -262,6 +287,7 @@ public class L2BridgingComponent {
         final FlowRule rule = Utils.buildFlowRule(
                 deviceId, appId, "FabricIngress.l2_exact_table",
                 hostMacCriterion, l2UnicastAction);
+        // ---- END SOLUTION ----
 
         // Insert.
         flowRuleService.applyFlowRules(rule);
@@ -300,6 +326,9 @@ public class L2BridgingComponent {
                 // A P4Runtime device is considered available in ONOS when there
                 // is a StreamChannel session open and the pipeline
                 // configuration has been set.
+
+                // Events are processed using a thread pool defined in the
+                // MainComponent.
                 mainComponent.getExecutorService().execute(() -> {
                     log.info("{} event! deviceId={}", event.type(), deviceId);
 
@@ -365,7 +394,16 @@ public class L2BridgingComponent {
      */
     private Set<PortNumber> getHostFacingPorts(DeviceId deviceId) {
         // Get all interfaces configured via netcfg for the given device ID and
-        // return the corresponding device port number.
+        // return the corresponding device port number. Interface configuration
+        // in the netcfg.json looks like this:
+        // "device:leaf1/3": {
+        //   "interfaces": [
+        //     {
+        //       "name": "leaf1-3",
+        //       "ips": ["2001:1:1::ff/64"]
+        //     }
+        //   ]
+        // }
         return interfaceService.getInterfaces().stream()
                 .map(Interface::connectPoint)
                 .filter(cp -> cp.deviceId().equals(deviceId))
@@ -374,19 +412,34 @@ public class L2BridgingComponent {
     }
 
     /**
-     * Returns true if the given device is defined as a spine in the netcfg.
+     * Returns true if the given device is defined as a spine in the
+     * netcfg.json.
      *
      * @param deviceId device ID
      * @return true if spine, false otherwise
      */
     private boolean isSpine(DeviceId deviceId) {
-        final Srv6DeviceConfig cfg = configService.getConfig(deviceId, Srv6DeviceConfig.class);
+        // Example netcfg defining a device as spine:
+        // "devices": {
+        //   "device:spine1": {
+        //     ...
+        //     "srv6DeviceConfig": {
+        //       "myStationMac": "...",
+        //       "mySid": "...",
+        //       "isSpine": true
+        //     }
+        //   },
+        //   ...
+        final Srv6DeviceConfig cfg = configService.getConfig(
+                deviceId, Srv6DeviceConfig.class);
         return cfg != null && cfg.isSpine();
     }
 
     /**
      * Sets up L2 bridging on all devices known by ONOS and for which this ONOS
      * node instance is currently master.
+     * <p>
+     * This method is called at component activation.
      */
     private void setUpAllDevices() {
         deviceService.getAvailableDevices().forEach(device -> {

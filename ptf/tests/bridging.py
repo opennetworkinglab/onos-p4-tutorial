@@ -17,29 +17,44 @@
 # ------------------------------------------------------------------------------
 # BRIDGING TESTS
 #
-# To run all tests:
+# To run all tests in this file:
+#     cd ptf
 #     make bridging
+#
+# To run a specific test case:
+#     make bridging.<TEST CLASS NAME>
+#
+# For example:
+#     make bridging.BridgingTest
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Modify everywhere you see TODO
+#
+# When providing your solution, make sure to use the same names for P4Runtime
+# entities as specified in your P4Info file.
+#
+# Test cases are based on the P4 program design suggested in the exercises
+# README. Make sure to modify the test cases accordingly if you decide to
+# implement the pipeline differently.
 # ------------------------------------------------------------------------------
 
 from ptf.testutils import group
 
 from lib.base_test import *
 
-# ------------------------------------------------------------------------------
-# P4 CONSTANTS
-#
-# Modify to match the content of your P4 program or P4Info file.
-# ------------------------------------------------------------------------------
-
+# From the P4 program.
 CPU_CLONE_SESSION_ID = 99
+
 
 @group("bridging")
 class ArpNdpRequestWithCloneTest(P4RuntimeTest):
-    """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation as
-    well as cloning to CPU (controller) for host discovery
+    """Tests ability to broadcast ARP requests and NDP Neighbor Solicitation
+    (NS) messages as well as cloning to CPU (controller) for host discovery.
     """
 
     def runTest(self):
+        #  Test With both ARP and NDP NS packets...
         print_inline("ARP request ... ")
         arp_pkt = testutils.simple_arp_packet()
         self.testPacket(arp_pkt)
@@ -60,6 +75,10 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
             ports=mcast_ports)
 
         # Match eth dst: FF:FF:FF:FF:FF:FF (MAC broadcast for ARP requests)
+        # TODO EXERCISE 2
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_ternary_table",
             match_fields={
@@ -74,12 +93,17 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
             },
             priority=DEFAULT_PRIORITY
         ))
+        # ---- END SOLUTION ----
 
         # Match eth dst: 33:33:**:**:**:** (IPv6 multicast for NDP requests)
+        # TODO EXERCISE 2
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_ternary_table",
             match_fields={
-                # Ternary match.
+                # Ternary match (value, mask)
                 "hdr.ethernet.dst_addr": (
                     "33:33:00:00:00:00",
                     "FF:FF:00:00:00:00")
@@ -90,8 +114,9 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
             },
             priority=DEFAULT_PRIORITY
         ))
+        # ---- END SOLUTION ----
 
-        # CPU clone session.
+        # Insert CPU clone session.
         self.insert_pre_clone_session(
             session_id=CPU_CLONE_SESSION_ID,
             ports=[self.cpu_port])
@@ -121,20 +146,18 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         ))
 
         for inport in mcast_ports:
+
+            # Send packet...
             testutils.send_packet(self, inport, str(pkt))
 
+            # Pkt should be received on CPU via PacketIn...
             # Expected P4Runtime PacketIn message.
             exp_packet_in_msg = self.helper.build_packet_in(
                 payload=str(pkt),
                 metadata={
-                    # TODO: modify metadata names to match P4 program
-                    # ---- START SOLUTION ----
                     "ingress_port": inport,
                     "_pad": 0
-                    # ---- END SOLUTION ----
                 })
-
-            # Pkt should be received on CPU via PacketIn...
             self.verify_packet_in(exp_packet_in_msg)
 
             # ...and on all ports except the ingress one.
@@ -148,11 +171,12 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
 
 @group("bridging")
 class ArpNdpReplyWithCloneTest(P4RuntimeTest):
-    """Tests ability to clone ARP/NDP replies as well as unicast forwarding to
-    requesting host.
+    """Tests ability to clone ARP replies and NDP Neighbor Advertisement
+    (NA) messages as well as unicast forwarding to requesting host.
     """
 
     def runTest(self):
+        #  Test With both ARP and NDP NS packets...
         print_inline("ARP reply ... ")
         # op=1 request, op=2 relpy
         arp_pkt = testutils.simple_arp_packet(
@@ -165,6 +189,12 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
 
     @autocleanup
     def testPacket(self, pkt):
+
+        # L2 unicast entry, match on pkt's eth dst address.
+        # TODO EXERCISE 2
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
@@ -176,6 +206,7 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
                 "port_num": self.port2
             }
         ))
+        # ---- END SOLUTION ----
 
         # CPU clone session.
         self.insert_pre_clone_session(
@@ -206,28 +237,28 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
             priority=DEFAULT_PRIORITY
         ))
 
+        testutils.send_packet(self, self.port1, str(pkt))
+
+        # Pkt should be received on CPU via PacketIn...
         # Expected P4Runtime PacketIn message.
         exp_packet_in_msg = self.helper.build_packet_in(
             payload=str(pkt),
             metadata={
-                # TODO: modify metadata names to match P4 program
-                # ---- START SOLUTION ----
                 "ingress_port": self.port1,
                 "_pad": 0
-                # ---- END SOLUTION ----
             })
-
-        testutils.send_packet(self, self.port1, str(pkt))
-
         self.verify_packet_in(exp_packet_in_msg)
+
+        # ..and on port2 as indicated by the L2 unicast rule.
         testutils.verify_packet(self, pkt, self.port2)
 
 
 @group("bridging")
 class BridgingTest(P4RuntimeTest):
-    """Tests basic L2 forwarding"""
+    """Tests basic L2 unicast forwarding"""
 
     def runTest(self):
+        # Test with different type of packets.
         for pkt_type in ["tcp", "udp", "icmp", "tcpv6", "udpv6", "icmpv6"]:
             print_inline("%s ... " % pkt_type)
             pkt = getattr(testutils, "simple_%s_packet" % pkt_type)(pktlen=120)
@@ -236,6 +267,11 @@ class BridgingTest(P4RuntimeTest):
     @autocleanup
     def testPacket(self, pkt):
 
+        # Insert L2 unicast entry, match on pkt's eth dst address.
+        # TODO EXERCISE 2
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
@@ -247,10 +283,16 @@ class BridgingTest(P4RuntimeTest):
                 "port_num": self.port2
             }
         ))
+        # ---- END SOLUTION ----
 
         # Test bidirectional forwarding by swapping MAC addresses on the pkt
         pkt2 = pkt_mac_swap(pkt.copy())
 
+        # Insert L2 unicast entry for pkt2.
+        # TODO EXERCISE 2
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
@@ -262,7 +304,9 @@ class BridgingTest(P4RuntimeTest):
                 "port_num": self.port1
             }
         ))
+        # ---- END SOLUTION ----
 
+        # Send and verify.
         testutils.send_packet(self, self.port1, str(pkt))
         testutils.send_packet(self, self.port2, str(pkt2))
 

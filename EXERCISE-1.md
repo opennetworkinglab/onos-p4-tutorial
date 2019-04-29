@@ -74,12 +74,15 @@ the P4 program to implement it:
 1. Open `p4src/main.p4`;
 2. Look for the implementation of the egress pipeline (`control FabricEgress`);
 3. Modify the code where requested (look for `TODO EXERCISE 1`);
-4. Compile the modified P4 program using the `make p4` command.
+4. Compile the modified P4 program using the `make p4` command. Make sure to
+   address any compiler errors before continuing.
 
 The last command will produce two output files under `p4src/build`:
 
 * `bmv2.json`: BMv2 JSON pipeline configuration
 * `p4info.txt`: P4Info file in protobuf text format
+
+At this point, our P4 pipeline should be ready for testing.
 
 ### 2. Run PTF tests
 
@@ -362,8 +365,8 @@ leaf1-3: port=device:leaf1/3 ips=[2001:1:1::ff/64]
 leaf1-4: port=device:leaf1/4 ips=[2001:1:1::ff/64]
 leaf1-5: port=device:leaf1/5 ips=[2001:1:1::ff/64]
 leaf1-6: port=device:leaf1/6 ips=[2001:1:2::ff/64]
-leaf2-3: port=device:leaf2/3 ips=[2001:1:3::ff/64]
-leaf2-4: port=device:leaf2/4 ips=[2001:1:4::ff/64]
+leaf2-3: port=device:leaf2/3 ips=[2001:2:3::ff/64]
+leaf2-4: port=device:leaf2/4 ips=[2001:2:4::ff/64]
 ```
 
 This IPv6 address configuration will be used later to provide routing
