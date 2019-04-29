@@ -15,6 +15,7 @@
  */
 package org.p4.p4d2.tutorial;
 
+import com.google.common.collect.Lists;
 import org.onlab.packet.Ip6Address;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.mastership.MastershipService;
@@ -136,12 +137,14 @@ public class Srv6Component {
 
         log.info("Adding mySid rule on {} (sid {})...", deviceId, mySid);
 
-        // TODO: fill in the table ID for the SRv6 my segment identifier table
+        // TODO EXERCISE 4
+        // Fill in the table ID for the SRv6 my segment identifier table
         // ---- START SOLUTION ----
         String tableId = "FabricIngress.srv6_my_sid";
         // ---- END SOLUTION ----
 
-        // TODO: build the match and action from the provided parameters
+        // TODO EXERCISE 4
+        // Modify the field and action id to match your P4Info
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 .matchTernary(
@@ -178,25 +181,29 @@ public class Srv6Component {
             throw new RuntimeException("List of " + segmentList.size() + " segments is not supported");
         }
 
-        // TODO: fill in the table ID for the SRv6 transit table
+        // TODO EXERCISE 4
+        // Fill in the table ID for the SRv6 transit table.
         // ---- START SOLUTION ----
         String tableId = "FabricIngress.srv6_transit";
         // ---- END SOLUTION ----
 
-        // TODO: build the match and action from the provided parameters
+        // TODO EXERCISE 4
+        // Modify match field, action id, and action parameter to match your P4Info.
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"), destIp.toOctets(), prefixLength)
                 .build();
 
-        AtomicInteger segmentIndex = new AtomicInteger();
-        List<PiActionParam> actionParams = segmentList.stream()
-                .map(segment -> new PiActionParam(
-                        PiActionParamId.of("s" + segmentIndex.incrementAndGet()), segment.toOctets()))
-                .collect(Collectors.toList());
+        List<PiActionParam> actionParams = Lists.newArrayList();
+
+        for (int i = 0; i < segmentList.size(); i++) {
+            PiActionParamId paramId = PiActionParamId.of("s" + (i+1));
+            PiActionParam param = new PiActionParam(paramId, segmentList.get(i).toOctets());
+            actionParams.add(param);
+        }
 
         PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.srv6_t_insert_" + segmentIndex.get()))
+                .withId(PiActionId.of("FabricIngress.srv6_t_insert_" + segmentList.size()))
                 .withParameters(actionParams)
                 .build();
         // ---- END SOLUTION ----
@@ -225,6 +232,8 @@ public class Srv6Component {
                 .forEach(ops::remove);
         flowRuleService.apply(ops.build());
     }
+
+    // ---------- END METHODS TO COMPLETE ----------------
 
     //--------------------------------------------------------------------------
     // EVENT LISTENERS

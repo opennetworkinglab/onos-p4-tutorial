@@ -18,6 +18,23 @@
 #
 # To run all tests:
 #     make srv6
+#
+# To run a specific test case:
+#     make srv6.<TEST CLASS NAME>
+#
+# For example:
+#     make srv6.Srv6InsertTest
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Modify everywhere you see TODO
+#
+# When providing your solution, make sure to use the same names for P4Runtime
+# entities as specified in your P4Info file.
+#
+# Test cases are based on the P4 program design suggested in the exercises
+# README. Make sure to modify the test cases accordingly if you decide to
+# implement the pipeline differently.
 # ------------------------------------------------------------------------------
 
 from ptf.testutils import group
@@ -106,6 +123,9 @@ class Srv6InsertTest(P4RuntimeTest):
         action_name = "FabricIngress.srv6_t_insert_%d" % sid_len
         actions_params = {"s%d" % (x + 1): sid_list[x] for x in range(sid_len)}
 
+        # TODO EXERCISE 4
+        # Fill table_name and match fields to match your P4Info file.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_transit",
             match_fields={
@@ -115,6 +135,7 @@ class Srv6InsertTest(P4RuntimeTest):
             action_name=action_name,
             action_params=actions_params
         ))
+        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
@@ -158,7 +179,7 @@ class Srv6InsertTest(P4RuntimeTest):
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
 
-        # FIXME: update P4 program to calculate correct checksum
+        # Bonus: update P4 program to calculate correct checksum
         set_cksum(pkt, 1)
         set_cksum(exp_pkt, 1)
 
@@ -204,6 +225,9 @@ class Srv6TransitTest(P4RuntimeTest):
         ))
 
         # This should be missed, this is plain IPv6 routing.
+        # TODO EXERCISE 4
+        # Fill table_name, match fields and action name to match your P4Info file.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
@@ -212,6 +236,7 @@ class Srv6TransitTest(P4RuntimeTest):
             },
             action_name="FabricIngress.srv6_end"
         ))
+        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
@@ -253,7 +278,7 @@ class Srv6TransitTest(P4RuntimeTest):
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
 
-        # FIXME: update P4 program to calculate correct checksum
+        # Bonus: update P4 program to calculate correct checksum
         set_cksum(pkt, 1)
         set_cksum(exp_pkt, 1)
 
@@ -297,6 +322,9 @@ class Srv6EndTest(P4RuntimeTest):
         ))
 
         # This should be matched, we want SRv6 end behavior to be applied.
+        # TODO EXERCISE 4
+        # Fill table_name, match fields and action name to match your P4Info file.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
@@ -305,6 +333,7 @@ class Srv6EndTest(P4RuntimeTest):
             },
             action_name="FabricIngress.srv6_end"
         ))
+        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
@@ -352,7 +381,7 @@ class Srv6EndTest(P4RuntimeTest):
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
 
-        # FIXME: update P4 program to calculate correct checksum
+        # Bonus: update P4 program to calculate correct checksum
         set_cksum(pkt, 1)
         set_cksum(exp_pkt, 1)
 
@@ -396,6 +425,9 @@ class Srv6EndPspTest(P4RuntimeTest):
         ))
 
         # This should be matched, we want SRv6 end behavior to be applied.
+        # TODO EXERCISE 4
+        # Fill table_name, match fields and action name to match your P4Info file.
+        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
@@ -404,6 +436,7 @@ class Srv6EndPspTest(P4RuntimeTest):
             },
             action_name="FabricIngress.srv6_end"
         ))
+        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
@@ -451,7 +484,7 @@ class Srv6EndPspTest(P4RuntimeTest):
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
 
-        # FIXME: update P4 program to calculate correct checksum
+        # Bonus: update P4 program to calculate correct checksum
         set_cksum(pkt, 1)
         set_cksum(exp_pkt, 1)
 

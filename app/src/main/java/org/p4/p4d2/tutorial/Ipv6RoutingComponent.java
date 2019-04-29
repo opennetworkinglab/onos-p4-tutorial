@@ -171,6 +171,12 @@ public class Ipv6RoutingComponent {
                 });
     }
 
+    //--------------------------------------------------------------------------
+    // METHODS TO COMPLETE.
+    //
+    // Complete the implementation wherever you see TODO.
+    //--------------------------------------------------------------------------
+
     /**
      * Sets up my station table for the given device with the myStationMac
      * address found in the config.
