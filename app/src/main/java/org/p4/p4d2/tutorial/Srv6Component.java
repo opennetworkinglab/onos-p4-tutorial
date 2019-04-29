@@ -147,10 +147,9 @@ public class Srv6Component {
         // Modify the field and action id to match your P4Info
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
-                .matchTernary(
+                .matchLpm(
                         PiMatchFieldId.of("hdr.ipv6.dst_addr"),
-                        mySid.toOctets(),
-                        Ip6Address.makeMaskPrefix(128).toOctets())
+                        mySid.toOctets(), 128)
                 .build();
 
         PiTableAction action = PiAction.builder()
