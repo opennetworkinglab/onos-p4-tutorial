@@ -81,7 +81,7 @@ class IPv6RoutingTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
             match_fields={
-                # Ternary match.
+                # Exact match
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
             action_name="FabricIngress.set_output_port",
