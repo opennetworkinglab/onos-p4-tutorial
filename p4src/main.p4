@@ -248,25 +248,22 @@ control FabricIngress (inout parsed_headers_t hdr,
             ndp_reply.apply();
         }
         if (l2_my_station.apply().hit) {
-        //switch (l2_my_station.apply().action_run) { // can also just use .hit
-           //mark_l3_fwd: {
-              if (hdr.ipv6.isValid()) {
-                  if (srv6_my_sid.apply().hit) {
-                       // PSP logic -- enabled for all packets
-                       if (hdr.srv6h.isValid() && hdr.srv6h.segment_left == 0) {
-                            srv6_pop();
-                       }
-                  } else {
-                       srv6_transit.apply();
-                  }
-                  l3_table.apply();
-                  if(hdr.ipv6.hop_limit == 0) {
-                      drop();
-                  }
-              }
-           //}
+            if (hdr.ipv6.isValid()) {
+                if (srv6_my_sid.apply().hit) {
+                    // PSP logic -- enabled for all packets
+                    if (hdr.srv6h.isValid() && hdr.srv6h.segment_left == 0) {
+                        srv6_pop();
+                    }
+                } else {
+                    srv6_transit.apply();
+                }
+                l3_table.apply();
+                if(hdr.ipv6.hop_limit == 0) {
+                    drop();
+                }
+            }
         }
-        if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) { // FIXME packet not marked drop
+        if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) {
             if (!l2_exact_table.apply().hit) {
                 l2_ternary_table.apply();
             }
