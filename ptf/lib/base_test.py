@@ -19,6 +19,7 @@
 # Carmelo Cascone (carmelo@opennetworking.org)
 #
 
+import itertools
 import Queue
 import sys
 import threading
@@ -220,7 +221,8 @@ class P4RuntimeErrorIterator:
         error = None
         # The gRPC Python package does not have a convenient way to access the
         # binary details for the error: they are treated as trailing metadata.
-        for meta in self.grpc_error.trailing_metadata():
+        for meta in itertools.chain(self.grpc_error.initial_metadata(),
+                                    self.grpc_error.trailing_metadata()):
             if meta[0] == "grpc-status-details-bin":
                 error = status_pb2.Status()
                 error.ParseFromString(meta[1])
