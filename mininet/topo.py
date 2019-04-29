@@ -36,18 +36,14 @@ class TutorialTopo(Topo):
 
         # Leaves
         leaf1 = self.addSwitch('leaf1', cls=ONOSStratumSwitch, grpcport=50001,
-                               pipeconf="org.p4.srv6-tutorial",
                                cpuport=CPU_PORT)
         leaf2 = self.addSwitch('leaf2', cls=ONOSStratumSwitch, grpcport=50002,
-                               pipeconf="org.p4.srv6-tutorial",
                                cpuport=CPU_PORT)
 
         # Spines
         spine1 = self.addSwitch('spine1', cls=ONOSStratumSwitch, grpcport=50003,
-                                pipeconf="org.p4.srv6-tutorial",
                                 cpuport=CPU_PORT)
         spine2 = self.addSwitch('spine2', cls=ONOSStratumSwitch, grpcport=50004,
-                                pipeconf="org.p4.srv6-tutorial",
                                 cpuport=CPU_PORT)
 
         # Switch Links
