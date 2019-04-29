@@ -93,7 +93,7 @@ the exercises, here's a quick reference:
 | `make p4`          | Builds the P4 program                                  |
 | `make onos-run`    | Runs ONOS on the current terminal window               |
 | `make onos-cli`    | Access the ONOS command line interface (CLI)           |
-| `make app-reload`  | Builds the tutorial app and pipeconf                   |
+| `make app-build`   | Builds the tutorial app and pipeconf                   |
 | `make app-reload`  | Load the app in ONOS                                   |
 | `make topo`        | Starts the Mininet topology                            |
 | `make netcfg`      | Pushes netcfg.json file (network config) to ONOS       |
