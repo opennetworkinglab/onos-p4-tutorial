@@ -54,7 +54,7 @@ import static com.google.common.collect.Streams.stream;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
 
 /**
- * Application which handles IPv6 routing.
+ * Application which handles SRv6 segment routing.
  */
 @Component(
         immediate = true,
@@ -136,15 +136,24 @@ public class Srv6Component {
 
         log.info("Adding mySid rule on {} (sid {})...", deviceId, mySid);
 
+        // TODO: fill in the table ID for the SRv6 my segment identifier table
+        // ---- START SOLUTION ----
+        String tableId = "FabricIngress.srv6_my_sid";
+        // ---- END SOLUTION ----
+
+        // TODO: build the match and action from the provided parameters
+        // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 .matchTernary(
                         PiMatchFieldId.of("hdr.ipv6.dst_addr"),
                         mySid.toOctets(),
                         Ip6Address.makeMaskPrefix(128).toOctets())
                 .build();
+
         PiTableAction action = PiAction.builder()
                 .withId(PiActionId.of("FabricIngress.srv6_end"))
                 .build();
+        // ---- END SOLUTION ----
 
         FlowRule myStationRule = Utils.buildFlowRule(
                 deviceId, appId,
@@ -169,6 +178,13 @@ public class Srv6Component {
             throw new RuntimeException("List of " + segmentList.size() + " segments is not supported");
         }
 
+        // TODO: fill in the table ID for the SRv6 transit table
+        // ---- START SOLUTION ----
+        String tableId = "FabricIngress.srv6_transit";
+        // ---- END SOLUTION ----
+
+        // TODO: build the match and action from the provided parameters
+        // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"), destIp.toOctets(), prefixLength)
                 .build();
@@ -183,11 +199,10 @@ public class Srv6Component {
                 .withId(PiActionId.of("FabricIngress.srv6_t_insert_" + segmentIndex.get()))
                 .withParameters(actionParams)
                 .build();
+        // ---- END SOLUTION ----
 
         final FlowRule rule = Utils.buildFlowRule(
-                deviceId, appId,
-                "FabricIngress.srv6_transit",
-                match, action);
+                deviceId, appId, tableId, match, action);
 
         flowRuleService.applyFlowRules(rule);
     }
@@ -198,10 +213,15 @@ public class Srv6Component {
      * @param deviceId device ID
      */
     public void clearSrv6InsertRules(DeviceId deviceId) {
+        // TODO: fill in the table ID for the SRv6 transit table
+        // ---- START SOLUTION ----
+        String tableId = "FabricIngress.srv6_transit";
+        // ---- END SOLUTION ----
+
         FlowRuleOperations.Builder ops = FlowRuleOperations.builder();
         stream(flowRuleService.getFlowEntries(deviceId))
                 .filter(fe -> fe.appId() == appId.id())
-                .filter(fe -> fe.table().equals(PiTableId.of("FabricIngress.srv6_transit")))
+                .filter(fe -> fe.table().equals(PiTableId.of(tableId)))
                 .forEach(ops::remove);
         flowRuleService.apply(ops.build());
     }

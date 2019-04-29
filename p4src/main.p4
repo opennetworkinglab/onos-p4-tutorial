@@ -141,7 +141,7 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     table srv6_my_sid {
       key = {
-          hdr.ipv6.dst_addr: ternary;
+          hdr.ipv6.dst_addr: lpm;
       }
       actions = {
           srv6_end;
@@ -190,7 +190,7 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     table srv6_transit {
       key = {
-          hdr.ipv6.dst_addr: lpm; //TODO ternary?
+          hdr.ipv6.dst_addr: lpm;
           //TODO what other fields do we want to match?
       }
       actions = {
