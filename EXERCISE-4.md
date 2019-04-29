@@ -218,7 +218,7 @@ If you need to remove your SRv6 policies, you can use the `srv6-clear` command t
 from a specific device. For example to remove flows from `leaf1`, use this command:
 
 ```
-onos> srv6-clear device:bmv2:leaf1 
+onos> srv6-clear device:leaf1 
 ```
 
 ### 5.Testing with Mininet
