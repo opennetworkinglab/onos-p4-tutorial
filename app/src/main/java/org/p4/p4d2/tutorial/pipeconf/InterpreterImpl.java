@@ -152,7 +152,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
         }
 
         // Create metadata instance for egress port.
-        // TODO: modify metadata names to match P4 program
+        // TODO EXERCISE 1: modify metadata names to match P4 program
         // ---- START SOLUTION ----
         final String outPortMetadataName = "egress_port";
         // ---- END SOLUTION ----
@@ -184,7 +184,7 @@ public class InterpreterImpl extends AbstractHandlerBehaviour
             throws PiInterpreterException {
 
         // Find the ingress_port metadata.
-        // TODO: modify metadata names to match P4 program
+        // TODO EXERCISE 1: modify metadata names to match P4 program
         // ---- START SOLUTION ----
         final String inportMetadataName = "ingress_port";
         // ---- END SOLUTION ----
