@@ -1,6 +1,6 @@
 # Exercise 1: Software tools basics and packet I/O
 
-This exercise provides an hands-on introduction to the software tools used in
+This exercise provides a hands-on introduction to the software tools used in
 the rest of the tutorial.
 
 As a start, in this exercise you will learn how to:
@@ -41,7 +41,7 @@ header packet_out_header_t {
 ```
 
 These headers are used to carry the original switch ingress port of a packet-in,
-and specify the intended outut port for a packet-out.
+and specify the intended output port for a packet-out.
 
 When the P4Runtime agent in Stratum receives a packet from the CPU port, it
 expects to find the `packet_in_header_t` header as the first one in the frame.
@@ -51,7 +51,7 @@ populate the corresponding `PacketIn.metadata` fields, including the ingress
 port as in this case.
 
 Similarly, when Stratum receives a P4Runtime `PacketOut` message, it uses the
-values found in the `PacketOut.metdata` fields to serialize and prepend a
+values found in the `PacketOut.metadata` fields to serialize and prepend a
 `packet_out_header_t` to the `PacketOut.payload` before feeding it to the
 pipeline parser.
 
@@ -84,7 +84,7 @@ The last command will produce two output files under `p4src/build`:
 ### 2. Run PTF tests
 
 Before starting ONOS, let's make sure the P4 changes work as expected by
-running some PTF tests. But first, you  need to apply few simple changes to the
+running some PTF tests. But first, you need to apply a few simple changes to the
 test case implementation.
 
 Open file `ptf/tests/packetio.py` and modify wherever requested (look for `TODO
@@ -93,7 +93,7 @@ packet-out. In both test cases, you will have to modify the implementation to
 use the same name for P4Runtime entities as specified in the P4Info file
 obtained after compiling the P4 program (`p4src/build/p4info.txt`).
 
-To run all tests for this exercise:
+To run all the tests for this exercise:
 
     cd ptf
     make packetio
@@ -126,17 +126,18 @@ things, the ONOS representation of packet-in/out, with one compliant with the P4
 implementation.
 
 Specifically, to use services like LLDP-based link discovery, ONOS built-in
-apps need to be able to set the outut port of a packet-out, and access the
+apps need to be able to set the output port of a packet-out and access the
 original ingress port of a packet-in.
 
-In the following you will be asked to apply few simple changes to the `PipelineInterpreter` implementation
+In the following, you will be asked to apply a few simple changes to the
+`PipelineInterpreter` implementation:
 
 1. Open file:
    `app/src/main/java/org/p4/p4d2/tutorial/pipeconf/InterpreterImpl.java`
 
 2. Modify wherever requested (look for `TODO EXERCISE 1`), specifically:
 
-    * Look for a method named `buildPacketOut`, modify implementation to use the
+    * Look for a method named `buildPacketOut`, modify the implementation to use the
       same name of the **egress port** metadata field for the `packet_out`
       header as specified in the P4Info file.
 
@@ -144,7 +145,7 @@ In the following you will be asked to apply few simple changes to the `PipelineI
       same name of the **ingress port** metadata field for the `packet_in`
       header as specified in the P4Info file.
 
-3. Build ONOS app (including the pipeconf) with command `make app-build`.
+3. Build ONOS app (including the pipeconf) with the command `make app-build`.
 
 The last command will trigger a build of the P4 program if necessary. The P4
 compiler outputs (`bmv2.json` and `p4info.txt`) are symlinked in the app
@@ -221,7 +222,7 @@ Make sure you see the following list of apps displayed:
 * ... org.onosproject.drivers.bmv2          ... BMv2 Drivers
 ```
 
-This is definitely more more apps than what defined in `$ONOS_APPS`. That's
+This is definitely more apps than what defined in `$ONOS_APPS`. That's
 because each app in ONOS can define other apps as dependencies. When loading an
 app, ONOS automatically resolve dependencies and loads all other required apps.
 
@@ -386,11 +387,11 @@ src=device:spine2/2, dst=device:leaf2/2, type=DIRECT, state=ACTIVE, expected=fal
 
 **If you don't see any link**, check the ONOS log for any error with
 packet-in/out handling. In case of errors, it's possible that you have not
-modified `InterpreterImpl.java` correctly. In this case, kill ONOS ang go back
+modified `InterpreterImpl.java` correctly. In this case, kill ONOS and go back
 to exercise step 3.
 
 **Note:** in theory, there should be no need to kill and restart ONOS. However,
-while ONOS supports reloading the pipeconf with a modified one (e.g. with
+while ONOS supports reloading the pipeconf with a modified one (e.g., with
 updated `bmv2.json` and `p4info.txt`), the version of ONOS used in this tutorial
 (2.1.0, the most recent at the time of writing) does not support reloading the
 pipeconf behavior classes, in  which case the old classes will still be used.
@@ -443,7 +444,7 @@ deviceId=device:leaf1, groupCount=1
        id=0x63, bucket=1, ..., weight=-1, actions=[OUTPUT:CONTROLLER]
 ```
 
-In this case you should see only one group of type `CLONE`, which is used to
+In this case, you should see only one group of type `CLONE`, which is used to
 clone packets to the controller (or to the CPU, using data plane terminology).
 `CLONE` groups are the ONOS northbound abstraction equivalent to P4Runtime's
 packet replication engine (PRE) `CloneSessionEntry`.
@@ -451,7 +452,7 @@ packet replication engine (PRE) `CloneSessionEntry`.
 
 ### Congratulations!
 
-Tou have completed the first exercise. You can move to the next one, or check
+You have completed the first exercise. You can move to the next one, or check
 the bonus steps below.
 
 ### Bonus: inspect BMv2 internal state
@@ -494,7 +495,7 @@ Action entry: FabricIngress.clone_to_cpu -
 Note how the ONOS selector `[ETH_TYPE:arp]` has been translated to an entry
 matching on the BMv2-specific header field `ethernet.ether_type`
 (`hdr.ethernet.ether_type` in the P4 program and P4Info), while the bits of all
-other fields are set as "don't care" (mask is all zeros).
+other fields are set as "don't care" (the mask is all zeros).
 
 Similarly, you can use the `mc_dump` command to show the state of the BMv2
 multicast engine, used to implement packet replication features such as clone

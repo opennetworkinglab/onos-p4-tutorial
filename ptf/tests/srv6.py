@@ -231,11 +231,10 @@ class Srv6TransitTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
-                # Ternary match (value, mask)
-                "hdr.ipv6.dst_addr": (my_sid, IPV6_MASK_ALL)
+                # Longest prefix match (value, prefix length)
+                "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end",
-            priority=DEFAULT_PRIORITY
+            action_name="FabricIngress.srv6_end"
         ))
         # ---- END SOLUTION ----
 
@@ -329,11 +328,10 @@ class Srv6EndTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
-                # Ternary match (value, mask)
-                "hdr.ipv6.dst_addr": (my_sid, IPV6_MASK_ALL)
+                # Longest prefix match (value, prefix length)
+                "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end",
-            priority=DEFAULT_PRIORITY
+            action_name="FabricIngress.srv6_end"
         ))
         # ---- END SOLUTION ----
 
@@ -433,11 +431,10 @@ class Srv6EndPspTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.srv6_my_sid",
             match_fields={
-                # Ternary match (value, mask)
-                "hdr.ipv6.dst_addr": (my_sid, IPV6_MASK_ALL)
+                # Longest prefix match (value, prefix length)
+                "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end",
-            priority=DEFAULT_PRIORITY
+            action_name="FabricIngress.srv6_end"
         ))
         # ---- END SOLUTION ----
 
