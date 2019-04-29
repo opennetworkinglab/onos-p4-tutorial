@@ -267,7 +267,7 @@ will first deactivate the running instance and load the new one.
 
 To apply new changes to the P4 program or app implementation, feel free to use
 `make app-build && make app-reload` as many times as you want. The app already
-includes logic to clean up any table entries and other forwarding states from
+includes logic to clean up any table entries and other forwarding state from
 ONOS at each reload.
 
 ### 6. Start Mininet topology
