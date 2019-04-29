@@ -196,10 +196,6 @@ OK
 
 Now we have shown that we can install basic rules and pass traffic using BMv2.
 
-Some troubleshooting tips:
- - Log for PTF is located at `tutorial/ptf/ptf.log`
- - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
-
 Developing the ONOS routing app
 ----
 
@@ -215,16 +211,106 @@ messages, as well as programming of P4 table entries and action profile
 groups to route packets across the fabric, using ECMP to distribute traffic
 between multiple spines.
 
-**The first step** is to modify the `setUpMyStationTable` method to insert a rule that
+First is to modify the `setUpMyStationTable` method to insert a rule that
 matches the router's Ethernet address and insert it into your my station table.
 
-**The second step** is to complete the `createNextHopGroup` method. This method creates an ONOS group with 
-given group ID and collection of next hop mac address.
+This method will be called when a device is added and the device is available, and get router(my station) mac address
+from network configuration. (See `InternalDeviceListener` class)
 
-You goal is to create actions for this group to set the next hop address to the packet.
+After completed the method and reload the application (`app-reload`), you should be able to get related flows from ONOS
+command line:
 
-**The third step** is to modify the `createRoutingRule` method to insert the routing rule with given IPv6 prefix
-and group ID.
+```
+sdn@root > flows -s
+... skip ...
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
+    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[hdr.ethernet.dst_addr=<Router Mac>], treatment=[immediate=[<Action Name>]]
+... skip ...
+```
 
-**The last step** is to add code to the `createNextHopRule` method which creates L2 rules for next hop. 
+----
+
+Second, complete three method below to provide routing with ECMP.
+
+These three methods will be called when a link or a host which connected to this device is up. 
+
+#### createNextHopGroup
+
+The `createNextHopGroup` creates an group with given group ID and collection of next hop mac address.
+
+An packet can be route to one or more next hop(s), when a routing entry uses this group, 
+the device will choose a group member(action) which based on implementation of `action selector` in previous section.
+
+Once a group member has selected, the device will perform the action, which sets the next hop mac address in this case.
+
+You goal is to create members(actions) for this group to set the next hop address to the packet.
+
+#### createRoutingRule
+
+The `createRoutingRule` creates the routing rule with given IPv6 prefix and group ID we used from previous method.
+
+#### createNextHopRule
+
+The `createNextHopRule` method which creates L2 rules for next hop. This method is used to set output port according to 
+the destination address. We already have similar method in `L2BridgingComponent` (see `learnHost` method).
+This method is called when two device(switch) connected, and create L2 rules between devices. We don't handle L2 rule 
+for hosts since we already installed necessary rules for host in `L2BridgingComponent`.
+
+----
+
+After the app completed and reload to ONOS, you should be able to ping between different hosts from multiple subnet.
+
+*Note:* The ONOS must learn host IP address first to install necessary rules. To check which hosts are learnt by ONOS 
+simply use `hosts` command in ONOS CLI (or `hosts -s` for simple one).
+
+There should be six hosts:
+```
+sdn@root > hosts -s
+id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:bmv2:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
+id=00:00:00:00:00:1B/None, mac=00:00:00:00:00:1B, locations=[device:bmv2:leaf1/4], vlan=None, ip(s)=[2001:1:1::b]
+id=00:00:00:00:00:1C/None, mac=00:00:00:00:00:1C, locations=[device:bmv2:leaf1/5], vlan=None, ip(s)=[2001:1:1::c]
+id=00:00:00:00:00:20/None, mac=00:00:00:00:00:20, locations=[device:bmv2:leaf1/6], vlan=None, ip(s)=[2001:1:2::a]
+id=00:00:00:00:00:30/None, mac=00:00:00:00:00:30, locations=[device:bmv2:leaf2/3], vlan=None, ip(s)=[2001:1:3::1]
+id=00:00:00:00:00:40/None, mac=00:00:00:00:00:40, locations=[device:bmv2:leaf2/4], vlan=None, ip(s)=[2001:1:4::1]
+```
+
+If you cannot find any host from ONOS CLI, try use the host to send some NDP packet so the controller can learn it.
+The easiest way to sent NDP packet is to ping another hosts with `ping` command, by default the host should send 
+a *Router Solicitation* or *Neighbor Solicitation* message and those message will be captured by the controller.
+
+Below is an example to send ping packet to `h1a` from `h2`.
+```
+mininet> h2 ping h1a
+PING 2001:1:1::a(2001:1:1::a) 56 data bytes
+64 bytes from 2001:1:1::a: icmp_seq=1 ttl=63 time=1.91 ms
+64 bytes from 2001:1:1::a: icmp_seq=2 ttl=63 time=0.825 ms
+64 bytes from 2001:1:1::a: icmp_seq=3 ttl=63 time=1.10 ms
+64 bytes from 2001:1:1::a: icmp_seq=4 ttl=63 time=0.803 ms
+64 bytes from 2001:1:1::a: icmp_seq=5 ttl=63 time=0.804 ms
+64 bytes from 2001:1:1::a: icmp_seq=6 ttl=63 time=1.01 ms
+```
+
+Some troubleshooting tips
+----
+
+ - Use `make reset` to cleanup everything.
+
+### PTF:
+
+ - Log for PTF is located at `tutorial/ptf/ptf.log`
+ - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
+
+#### Mininet:
+
+ - Sometimes the software switch may crash, restart the Mininet topology should fix this problem.
+ - If something goes wrong and the Mininet does not cleanup correctly, use `sudo mn -c` to cleanup, and make sure 
+   there is no other software switch running before restart the topology (check with `ps aux | grep bmv2`).
+ - All switch log can be found at `/tmp` directory.
+
+#### ONOS:
+
+ - Use `log:tail` ONOS command to get latest ONOS log
+ - If you cannot access ONOS shell, please check if the ONOS process is running or not (check with `ps aux | grep bmv2`).
 
