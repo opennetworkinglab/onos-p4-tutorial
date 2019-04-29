@@ -3,7 +3,7 @@
 This exercise provides an hands-on introduction to the software tools used in
 the rest of the tutorial.
 
-As a start, in this exercise you will lern how to:
+As a start, in this exercise you will learn how to:
 
 1. Start Mininet with a 2x2 leaf-spine topology of `stratum_bmv2` software
    switches
