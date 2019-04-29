@@ -1,7 +1,7 @@
 ## Exercise 4: Segment Routing v6 (SRv6)
 
-In this exercise, you will be be implementing a simplified version of segment routing,
-a source routing method that steers traffic though a specified set of nodes.
+In this exercise, you will be implementing a simplified version of segment routing,
+a source routing method that steers traffic through a specified set of nodes.
 
 This exercise is based on an IETF draft specification called SRv6, which uses
 IPv6 packets to frame traffic that follows an SRv6 policy. SRv6 packets use the
@@ -56,7 +56,7 @@ list is not typically mutated; the entire header is inserted or removed as a who
 
 To keep things simple and because we are already using IPv6, your solution will just
 be adding the routing header to the existing IPv6 packet. (We won't be embedding entire packets
-inside of new IPv6 packets with a SRv6 policy, although the spec allows it and there are
+inside of new IPv6 packets with an SRv6 policy, although the spec allows it and there are
 valid use cases for doing so.)
 
 As you may have already noticed, SRv6 uses IPv6 addresses to identify segments in a policy.
@@ -83,7 +83,6 @@ left), set the IPv6 destination address to the next segment, and forward the pac
 ("End" behavior). For simplicity, we will always remove the SRv6 header on the penultimate
 segment in the policy (called Penultimate Segment Pop or PSP in the spec).
 
-
 - Transit Node - by default, forward traffic normally if it is not destined for the
 switch's IP address or its SID ("T" behavior). Allow the control plane to add rules
 to inject SRv6 policy for traffic destined to specific IPv6 addresses ("T.Insert"
@@ -92,7 +91,9 @@ behavior).
 For more details, you can read the draft specification here:
 https://tools.ietf.org/id/draft-filsfils-spring-srv6-network-programming-06.html
 
-### Step 1: adding tables for SRv6
+## Exercise steps
+
+### 1.Adding tables for SRv6
 
 We have already defined the SRv6 header as well as included the logic for parsing the header
 in `header.p4` and `parser.p4` respectively.
@@ -106,50 +107,71 @@ Once you've finished that, you will need to apply the tables in the `apply` bloc
 of your `FabricEngress` section. You will want to apply the tables after checking that the L2
 destination address matches the switch's, and before the L3 table is applied (because you'll
 want to use the same routing entries to forward traffic after the SRv6 policy is applied). You
-can also apply the PSP behavior as part of your apply logic because we will always be applying it
+can also apply the PSP behavior as part of your `apply` logic because we will always be applying it
 if we are the penultimate SID.
 
-### Step 2: testing the pipeline with Packet Test Framework (PTF)
+### 2.Testing the pipeline with Packet Test Framework (PTF)
 
-FIXME: Testing with PTF
 In this exercise, you will be modifying tests in [srv6.py](ptf/tests/srv6.py) to verify the SRv6
 behavior of the pipeline.
 
-Now we can try the PTF test for routing without any modification.
+There are four tests in `srv6.py`:
 
-To run the test for routing, enter `ptf` directory and use following command:
-```bash
-make srv6
+ - Srv6InsertTest: Tests SRv6 insert behavior, where the switch receives an IPv6 packet and inserts the SRv6 header.
+
+ - Srv6TransitTest: Tests SRv6 transit behavior, where the switch ignores the SRv6 header
+                    and routes the packet normally, without applying any SRv6-related modifications.
+
+ - Srv6EndTest: Tests SRv6 end behavior (without pop), where the switch forwards the packet to the next
+                SID found in the SRv6 header.
+
+ - Srv6EndPspTest: Tests SRv6 End with Penultimate Segment Pop (PSP) behavior, where the switch SID is
+                   the penultimate in the SID list and the switch removes the SRv6 header before
+                   routing the packet to it's final destination (last SID in the list).
+
+You should be able to find `TODO EXERCISE 4` in [srv6.py](ptf/tests/srv6.py) with some hints.
+
+After finish all `TODO` we should be able to run the test and see the following messages:
+
+```
+sdn@onos-p4-tutorial:~/tutorial/ptf$ make srv6
+... Skip ...
+srv6.Srv6EndTest ... tcpv6 3 SIDs ... udpv6 3 SIDs ... icmpv6 3 SIDs ... tcpv6 4 SIDs ... udpv6 4 SIDs ... icmpv6 4 SIDs ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.076s
+
+OK
+srv6.Srv6TransitTest ... tcpv6 3 SIDs ... udpv6 3 SIDs ... icmpv6 3 SIDs ... tcpv6 2 SIDs ... udpv6 2 SIDs ... icmpv6 2 SIDs ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.067s
+
+OK
+srv6.Srv6EndPspTest ... tcpv6 2 SIDs ... udpv6 2 SIDs ... icmpv6 2 SIDs ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.042s
+
+OK
+srv6.Srv6InsertTest ... tcpv6 3 SIDs ... udpv6 3 SIDs ... icmpv6 3 SIDs ... tcpv6 2 SIDs ... udpv6 2 SIDs ... icmpv6 2 SIDs ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.067s
+
+OK
 ```
 
-you should see message like:
-
-```
-========== EXPECTED ==========
-.... Skip ....
-========== RECEIVED ==========
-0 total packets.
-==============================
-.... Skip ....
-ATTENTION: SOME TESTS DID NOT PASS!!!
-```
-
-# FIXME 
-
-Now we have shown that we can install basic rules and pass traffic using BMv2.
-
-Some troubleshooting tips:
- - Log for PTF is located at `tutorial/ptf/ptf.log`
- - Pcap file of PTF is located at `tutorial/ptf/ptf.pcap`, you can find what we sent and what we received.
+Now we have shown that we can install basic rules and pass SRv6 traffic using BMv2.
 
 ----
 
-### Step 3: building the ONOS App
+### 3.Building the ONOS App
 
 For the ONOS application, you will need to update `Srv6Component.java` in the following ways:
 
 - Complete the `setUpMySidTable` method which will insert an entry into the My SID table that matches the
-specified device's SID and performs the `end` action. This function is called whenever a new devices
+specified device's SID and performs the `end` action. This function is called whenever a new device
 is connected.
 
 - Complete the `insertSrv6InsertRule` function, which creates a `t_insert` rule along for the provided
@@ -159,13 +181,13 @@ SRv6 policy. This function is called by the `srv6-insert` CLI command.
 
 Once you are finished, you should rebuild and reload your app. This will also rebuild and republish any
 changes to your P4 code and the ONOS pipeconf.
-As with previous exercises, you can use the following command:
-                       
+As with previous exercises, you can use the following command to build and reload the app:
+
 ```bash
-$ make app-reload
+$ make app-build app-reload
 ```
 
-### Step 4: inserting an SRv6 policy
+### Step 4: Inserting and removing SRv6 policies
 
 To add new SRv6 policies, you should use the `srv6-insert` command.
 
@@ -177,7 +199,7 @@ For example, to add a policy that forwards traffic between h1a and h3 though spi
 the following command:
 
 ```
-onos> srv6-insert device:bmv2:leaf1 3:201:2:: 3:102:2:: 2001:1:3::1
+onos> srv6-insert device:leaf1 3:201:2:: 3:102:2:: 2001:1:3::1
 ```
 
 This command will match on traffic to the last segment on the specified device (e.g. match `2001:1:3::1` on
@@ -192,12 +214,6 @@ sdn@root > flows any device:bmv2:leaf1 | grep tableId=FabricIngress.srv6_transit
     id=c40000e582112b, state=ADDED, bytes=0, packets=0, duration=169, liveType=UNKNOWN, priority=10, tableId=FabricIngress.srv6_transit, appId=org.p4.srv6-tutorial.srv6, selector=[hdr.ipv6.dst_addr=0x20010001000300000000000000000001/128], treatment=DefaultTrafficTreatment{immediate=[FabricIngress.srv6_t_insert_3(s3=0x20010001000300000000000000000001, s1=0x20020000000000000000000000000001, s2=0x20010000000000000000000000000002)], deferred=[], transition=None, meter=[], cleared=false, StatTrigger=null, metadata=null}
 ```
 
-### Step 5: testing with Mininet
-
-FIXME: Testing with Mininet
-
-### Notes
-
 If you need to remove your SRv6 policies, you can use the `srv6-clear` command to clear all SRv6 policies
 from a specific device. For example to remove flows from `leaf1`, use this command:
 
@@ -205,4 +221,15 @@ from a specific device. For example to remove flows from `leaf1`, use this comma
 onos> srv6-clear device:bmv2:leaf1 
 ```
 
+### 5.Testing with Mininet
 
+After you installed the SRv6 policies, you are able to send some packets (e.g., ping) from host to host.
+
+To verify that the device inserts the correct SRv6 header, you can use **Wireshark** to capture packet from
+each device port.
+
+For example, if you want to capture packet from second port of leaf1, use `leaf1-eth2` as interface name:
+
+```
+sudo wireshark -i leaf1-eth2
+```

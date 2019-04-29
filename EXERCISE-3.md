@@ -127,7 +127,7 @@ matches the router's Ethernet address(`myStationMac` from network config) and in
 This method will be called when a device is added and the device is available, and get device mac address
 from network configuration. (See `InternalDeviceListener` class)
 
-After completed the method and reload the application (`make app-build && make app-reload`), 
+After completed the method and reload the application (`make app-build app-reload`),
 you should be able to get related flows from ONOS command line:
 
 ```
