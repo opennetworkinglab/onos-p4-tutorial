@@ -68,9 +68,9 @@ class TutorialTopo(Topo):
 
         # IPv6 hosts attached to leaf 2
         h3 = self.addHost('h3', cls=IPv6Host, mac="00:00:00:00:00:30",
-                          ipv6='2001:1:3::1/64', ipv6_gw='2001:1:3::ff')
+                          ipv6='2001:2:3::1/64', ipv6_gw='2001:2:3::ff')
         h4 = self.addHost('h4', cls=IPv6Host, mac="00:00:00:00:00:40",
-                          ipv6='2001:1:4::1/64', ipv6_gw='2001:1:4::ff')
+                          ipv6='2001:2:4::1/64', ipv6_gw='2001:2:4::ff')
         self.addLink(h3, leaf2)  # port 3
         self.addLink(h4, leaf2)  # port 4
 

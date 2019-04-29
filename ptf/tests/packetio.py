@@ -107,7 +107,7 @@ class PacketInTest(P4RuntimeTest):
         eth_type = pkt[Ether].type
         # TODO EXERCISE 1
         # Modify names to match content of P4Info file (look for the fully
-        # qualified names of the ACL table, EtherType match field, and
+        # qualified name of the ACL table, EtherType match field, and
         # clone_to_cpu action.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
