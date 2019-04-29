@@ -166,7 +166,7 @@ Now we have shown that we can install basic rules and pass SRv6 traffic using BM
 
 ----
 
-### 3.Building the ONOS App
+### Step 3.Building the ONOS App
 
 For the ONOS application, you will need to update `Srv6Component.java` in the following ways:
 
@@ -187,7 +187,22 @@ As with previous exercises, you can use the following command to build and reloa
 $ make app-build app-reload
 ```
 
-### Step 4: Inserting and removing SRv6 policies
+### Step 4: Inserting SRv6 policies
+
+The next step is to show that traffic can be steered using an SRv6 policy.
+
+You should start a ping between `h2` and `h4`:
+```
+mininet> h2 ping h4
+```
+
+Using the ONOS UI, you can observe which paths are being used for the ping packets.
+- Press `a` until you see "Port stats (packets/second)"
+- Press `l` to show device labels
+
+Once you determine which of the spines your packets are being hashed to (and it could be both),
+you should insert a set of SRv6 policies that sends the ping packets via the other spine (or
+the spine of your choice).
 
 To add new SRv6 policies, you should use the `srv6-insert` command.
 
@@ -195,24 +210,45 @@ To add new SRv6 policies, you should use the `srv6-insert` command.
 onos> srv6-insert <device ID> <segment list>
 ```
 
-For example, to add a policy that forwards traffic between h1a and h3 though spine1 and leaf2, you can use
+Note: In our topology, the SID for spine1 is `3:201:2::` and the SID for spine2 is `3:202:2::`.
+
+For example, to add a policy that forwards traffic between h2 and h4 though spine1 and leaf2, you can use
 the following command:
 
+- Insert the SRv6 policy from h2 to h4 on leaf1
 ```
-onos> srv6-insert device:leaf1 3:201:2:: 3:102:2:: 2001:1:3::1
+onos> srv6-insert device:leaf1 3:201:2:: 3:102:2:: 2001:1:4::1                                  16:12:15
+Installing path on device device:leaf1: 3:201:2::, 3:102:2::, 2001:1:4::1
+```
+- Insert the SRv6 policy from h4 to h2 on leaf2
+```
+onos> srv6-insert device:leaf2 3:201:2:: 3:101:2:: 2001:1:2::1                                  16:12:23
+Installing path on device device:leaf2: 3:201:2::, 3:101:2::, 2001:1:2::1
 ```
 
-This command will match on traffic to the last segment on the specified device (e.g. match `2001:1:3::1` on
+This command will match on traffic to the last segment on the specified device (e.g. match `2001:1:4::1` on
 `leaf1`). You can update the command to specific more specific match criteria as extra credit.
 
 You can confirm that your rule has been added using a variant of the following:
 
 (HINT: Make sure to update the tableId to match the one in your P4 program.)
 ```
-FIXME
-sdn@root > flows any device:leaf1 | grep tableId=FabricIngress.srv6_transit
-    id=c40000e582112b, state=ADDED, bytes=0, packets=0, duration=169, liveType=UNKNOWN, priority=10, tableId=FabricIngress.srv6_transit, appId=org.p4.srv6-tutorial.srv6, selector=[hdr.ipv6.dst_addr=0x20010001000300000000000000000001/128], treatment=DefaultTrafficTreatment{immediate=[FabricIngress.srv6_t_insert_3(s3=0x20010001000300000000000000000001, s1=0x20020000000000000000000000000001, s2=0x20010000000000000000000000000002)], deferred=[], transition=None, meter=[], cleared=false, StatTrigger=null, metadata=null}
+onos> flows any device:leaf1 | grep tableId=FabricIngress.srv6_transit
+    id=c000006d73f05e, state=ADDED, bytes=0, packets=0, duration=871, liveType=UNKNOWN, priority=10,
+    tableId=FabricIngress.srv6_transit,
+    appId=org.p4.srv6-tutorial,
+    selector=[hdr.ipv6.dst_addr=0x20010001000400000000000000000001/128],
+    treatment=DefaultTrafficTreatment{immediate=[
+        FabricIngress.srv6_t_insert_3(
+            s3=0x20010001000400000000000000000001,
+            s1=0x30201000200000000000000000000,
+            s2=0x30102000200000000000000000000)],
+    deferred=[], transition=None, meter=[], cleared=false, StatTrigger=null, metadata=null}
 ```
+
+You should now return to the ONOS UI to confirm that traffic is flowing through the specified spine.
+
+### Notes
 
 If you need to remove your SRv6 policies, you can use the `srv6-clear` command to clear all SRv6 policies
 from a specific device. For example to remove flows from `leaf1`, use this command:
@@ -220,10 +256,6 @@ from a specific device. For example to remove flows from `leaf1`, use this comma
 ```
 onos> srv6-clear device:leaf1 
 ```
-
-### 5.Testing with Mininet
-
-After you installed the SRv6 policies, you are able to send some packets (e.g., ping) from host to host.
 
 To verify that the device inserts the correct SRv6 header, you can use **Wireshark** to capture packet from
 each device port.
