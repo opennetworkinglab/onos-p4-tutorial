@@ -54,23 +54,23 @@ public final class Utils {
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
-    public static GroupDescription forgeMulticastGroup(
+    public static GroupDescription buildMulticastGroup(
             ApplicationId appId,
             DeviceId deviceId,
             int groupId,
             Collection<PortNumber> ports) {
-        return forgeReplicationGroup(appId, deviceId, groupId, ports, false);
+        return buildReplicationGroup(appId, deviceId, groupId, ports, false);
     }
 
-    public static GroupDescription forgeCloneGroup(
+    public static GroupDescription buildCloneGroup(
             ApplicationId appId,
             DeviceId deviceId,
             int groupId,
             Collection<PortNumber> ports) {
-        return forgeReplicationGroup(appId, deviceId, groupId, ports, true);
+        return buildReplicationGroup(appId, deviceId, groupId, ports, true);
     }
 
-    private static GroupDescription forgeReplicationGroup(
+    private static GroupDescription buildReplicationGroup(
             ApplicationId appId,
             DeviceId deviceId,
             int groupId,
@@ -98,7 +98,7 @@ public final class Utils {
                 groupKey, groupId, appId);
     }
 
-    public static FlowRule forgeFlowRule(DeviceId switchId, ApplicationId appId,
+    public static FlowRule buildFlowRule(DeviceId switchId, ApplicationId appId,
                                          String tableId, PiCriterion piCriterion,
                                          PiTableAction piAction) {
         return DefaultFlowRule.builder()
@@ -114,7 +114,7 @@ public final class Utils {
                 .build();
     }
 
-    public static GroupDescription forgeSelectGroup(DeviceId deviceId,
+    public static GroupDescription buildSelectGroup(DeviceId deviceId,
                                                     String tableId,
                                                     String actionProfileId,
                                                     int groupId,

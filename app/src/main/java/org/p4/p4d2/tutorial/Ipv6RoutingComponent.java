@@ -200,7 +200,7 @@ public class Ipv6RoutingComponent {
                 .build();
         // ---- END SOLUTION ----
 
-        FlowRule myStationRule = Utils.forgeFlowRule(
+        FlowRule myStationRule = Utils.buildFlowRule(
                 deviceId, appId,
                 tableId,
                 piMatch, piTableAction);
@@ -241,7 +241,7 @@ public class Ipv6RoutingComponent {
             actions.add(action);
         }
 
-        return Utils.forgeSelectGroup(
+        return Utils.buildSelectGroup(
                 deviceId, tableId, actionProfileId, groupId, actions, appId);
     }
 
@@ -271,7 +271,7 @@ public class Ipv6RoutingComponent {
         PiTableAction action = PiActionProfileGroupId.of(groupId);
         // ---- END SOLUTION ----
 
-        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
+        return Utils.buildFlowRule(deviceId, appId, tableId, match, action);
     }
 
     /**
@@ -306,7 +306,7 @@ public class Ipv6RoutingComponent {
                 .build();
         // ---- END SOLUTION ----
 
-        return Utils.forgeFlowRule(
+        return Utils.buildFlowRule(
                 deviceId, appId,
                 tableId,
                 match, action);

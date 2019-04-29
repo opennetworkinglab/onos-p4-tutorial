@@ -176,7 +176,7 @@ public class L2BridgingComponent {
                  ports.size(), deviceId);
 
         // Forge group object.
-        final GroupDescription multicastGroup = Utils.forgeMulticastGroup(
+        final GroupDescription multicastGroup = Utils.buildMulticastGroup(
                 appId, deviceId, DEFAULT_BROADCAST_GROUP_ID, ports);
 
         // Insert.
@@ -220,10 +220,10 @@ public class L2BridgingComponent {
 
         //  Forge 2 flow rules for  the given table.
         final String tableId = "FabricIngress.l2_ternary_table";
-        final FlowRule rule1 = Utils.forgeFlowRule(
+        final FlowRule rule1 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 macBroadcastCriterion, setMcastGroupAction);
-        final FlowRule rule2 = Utils.forgeFlowRule(
+        final FlowRule rule2 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 ipv6MulticastCriterion, setMcastGroupAction);
 
@@ -259,7 +259,7 @@ public class L2BridgingComponent {
                 .build();
 
         // Forge flow rule.
-        final FlowRule rule = Utils.forgeFlowRule(
+        final FlowRule rule = Utils.buildFlowRule(
                 deviceId, appId, "FabricIngress.l2_exact_table",
                 hostMacCriterion, l2UnicastAction);
 

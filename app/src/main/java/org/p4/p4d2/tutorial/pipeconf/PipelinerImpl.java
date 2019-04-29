@@ -114,7 +114,7 @@ public class PipelinerImpl extends AbstractHandlerBehaviour implements Pipeliner
             ruleBuilder.makeTemporary(obj.timeout());
         }
 
-        final GroupDescription cloneGroup = Utils.forgeCloneGroup(
+        final GroupDescription cloneGroup = Utils.buildCloneGroup(
                 obj.appId(),
                 deviceId,
                 CPU_CLONE_SESSION_ID,
