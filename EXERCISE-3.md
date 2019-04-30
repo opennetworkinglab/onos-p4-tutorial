@@ -362,4 +362,4 @@ below:
 ### Congratulations!
 
 You have completed Exercise 3! Now your fabric is capable of forwarding IPv6
-traffic across the fabric.
+traffic between any host.
