@@ -110,25 +110,19 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     /*
-     * L2 my station table.
+     * TODO EXERCISE 3
+     * Create a L2 my station table.
      * Hit when Ethernet destination address is the device address.
      * This table won't do anything to the packet, but the pipeline will use the result (table.hit)
-     * to decide how to process the packet.
+     * to decide how to process the packet. (Use NoAction for flow entries.)
      */
-    direct_counter(CounterType.packets_and_bytes) l2_my_station_table_counter;
-    table l2_my_station {
-        key = {
-            hdr.ethernet.dst_addr: exact;
-        }
-        actions = {
-            NoAction;
-        }
-        counters = l2_my_station_table_counter;
-    }
+
 
     /*
-     * L3 table.
-     * Handles IPv6 routing. Pickup a next hop address according to hash of packet header fields (5-tuple).
+     * TODO EXERCISE 3
+     * Create a L3 table for IPv6 routing.
+     * Handles IPv6 routing. Pick a next hop address according to hash of packet header fields
+     * (IPv6 source/destination address and the flow label).
      */
     action set_l2_next_hop(mac_addr_t dmac) {
         hdr.ethernet.src_addr = hdr.ethernet.dst_addr;
@@ -138,24 +132,7 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
     direct_counter(CounterType.packets_and_bytes) l3_table_counter;
-    table l3_table {
-      key = {
-          hdr.ipv6.dst_addr: lpm;
 
-          hdr.ipv6.dst_addr: selector;
-          hdr.ipv6.src_addr: selector;
-          hdr.ipv6.flow_label: selector;
-          // the rest of the 5-tuple is optional per RFC6438
-          fabric_metadata.ip_proto: selector;
-          fabric_metadata.l4_src_port: selector;
-          fabric_metadata.l4_dst_port: selector;
-      }
-      actions = {
-          set_l2_next_hop;
-      }
-      implementation = ecmp_selector;
-      counters = l3_table_counter;
-    }
 
     /*
      * TODO EXERCISE 4
@@ -167,6 +144,7 @@ control FabricIngress (inout parsed_headers_t hdr,
      *
      * You can create direct counter for this table if you would like to track flow stats in ONOS.
      */
+
 
     /*
      * SRv6 transit table.
@@ -215,7 +193,7 @@ control FabricIngress (inout parsed_headers_t hdr,
     table srv6_transit {
       key = {
           // TODO EXERCISE 4
-          // match fields for SRv6 transit rules; we'll start with the destination IP address
+          // Add match fields for SRv6 transit rules; we'll start with the destination IP address
       }
       actions = {
           srv6_t_insert_2;
@@ -276,18 +254,15 @@ control FabricIngress (inout parsed_headers_t hdr,
         if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
             ndp_reply_table.apply();
         }
-        if (l2_my_station.apply().hit) {
-            if (hdr.ipv6.isValid()) {
-                l3_table.apply();
-                if(hdr.ipv6.hop_limit == 0) {
-                    drop();
-                }
-            }
-        }
+
+        // TODO EXERCISE 3
+        // Insert logic to match the My Station table and upon hit, the routing table. You should also
+        // add a conditional to drop the packet if the hop_limit reaches 0.
+
         // TODO EXERCISE 4
         // Insert logic to match the SRv6 My SID and Transit tables as well as logic to perform PSP behavior
-        // HINT: This logic belongs somewhere between checking the switch's my station table and applying the routing
-        //       table.
+        // HINT: This logic belongs somewhere between checking the switch's my station table and applying the
+        //       routing table.
         if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) {
             if (!l2_exact_table.apply().hit) {
                 l2_ternary_table.apply();

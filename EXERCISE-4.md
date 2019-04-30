@@ -189,7 +189,7 @@ SRv6 policy. This function is called by the `srv6-insert` CLI command.
 - Complete the `clearSrv6InsertRules`, which is called by the `srv6-clear` CLI command.
 
 Once you are finished, you should rebuild and reload your app. This will also rebuild and republish any
-changes to your P4 code and the ONOS pipeconf.
+changes to your P4 code and the ONOS pipeconf. Don't forget to enable your Srv6Component at the top of the file.
 As with previous exercises, you can use the following command to build and reload the app:
 
 ```

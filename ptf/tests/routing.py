@@ -64,10 +64,10 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
             action_name="NoAction"
         ))
@@ -79,11 +79,11 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
         # ---- END SOLUTION ----
@@ -94,10 +94,10 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
-                "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
+                "MODIFY ME": (pkt[IPv6].dst, 128)
             },
             group_id=1
         ))
@@ -109,14 +109,14 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match
-                "hdr.ethernet.dst_addr": next_hop_mac
+                "MODIFY ME": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
         # ---- END SOLUTION ----
