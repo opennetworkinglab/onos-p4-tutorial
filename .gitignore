@@ -1,4 +1,5 @@
 .idea
 *.pyc
 app/target/*
+solution/app/target/*
 **/*.iml
