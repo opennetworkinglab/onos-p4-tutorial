@@ -116,3 +116,10 @@ Click on the exercise name to see the instructions:
  2. [L2 bridging](./EXERCISE-2.md)
  3. [IPv6 routing](./EXERCISE-3.md)
  4. [Segment Routing v6](./EXERCISE-4.md)
+
+## Solutions for each exercise
+
+You can find solutions for each exercise in the [solution](solution) directory
+To use the solution code that is provided, simply use the same tutorial **make**
+command in the solution directory. So you don't need to replace the code you are
+working on.
