@@ -221,7 +221,9 @@ control IngressPipeImpl (inout parsed_headers_t hdr,
         }
 
         if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
-            ndp_reply_table.apply();
+            if(ndp_reply_table.apply().hit) {
+                exit;
+            }
         }
 
         // TODO EXERCISE 3
