@@ -53,4 +53,5 @@ onos-version-check: $(ONOS_TAR_PATH)
 	@if [ $(LOCAL_ONOS_MD5) = $(ONOS_MD5) ]; then echo "ONOS is already up to date"; exit 1; fi
 
 onos-upgrade: onos-version-check
+	-rm -f $(ONOS_TAR_PATH)
 	curl $(ONOS_URL) -o $(ONOS_TAR_PATH)
