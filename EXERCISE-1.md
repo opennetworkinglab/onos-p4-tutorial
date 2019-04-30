@@ -20,6 +20,16 @@ data plane unit tests, and finally, apply changes to the pipeconf Java
 implementation to enable ONOS's built-in apps perform topology discovery using
 packet-in/out.
 
+To work on this exercise, you will need multiple terminal windows (or tabs) to
+operate with the CLI of Mininet, ONOS, and BMv2. We use the following convention
+to distinguish between commands of different CLIs:
+
+* Commands starting with `$` are intended to be executed in the Ubuntu terminal
+  prompt;
+* `onos>` for commands in the ONOS CLI;
+* `mininet>` for the Mininet CLI;
+* `RuntimeCmd:` for the BMv2 CLI.
+
 ## Controller packet I/O with P4Runtime
 
 The P4 program under `p4src/` provides support for carrying arbitrary metadata
