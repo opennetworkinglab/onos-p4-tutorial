@@ -81,7 +81,7 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  */
 @Component(
         immediate = true,
-        enabled = false
+        enabled = true
 )
 public class Ipv6RoutingComponent {
 
@@ -211,11 +211,12 @@ public class Ipv6RoutingComponent {
     }
 
     /**
-     * Creates an ONOS SELECT group for the routing table to provide ECMP forwarding for the given
-     * collection of next hop MAC addresses. ONOS SELECT groups are equivalent
-     * to P4Runtime action selector groups.
-     *
-     *      This method will be called by the routing policy methods below to insert groups in the L3 table.
+     * Creates an ONOS SELECT group for the routing table to provide ECMP
+     * forwarding for the given collection of next hop MAC addresses. ONOS
+     * SELECT groups are equivalent to P4Runtime action selector groups.
+     * <p>
+     * This method will be called by the routing policy methods below to insert
+     * groups in the L3 table
      *
      * @param nextHopMacs the collection of mac addresses of next hops
      * @param deviceId    the device where the group will be installed
@@ -288,6 +289,10 @@ public class Ipv6RoutingComponent {
     /**
      * Creates a flow rule for the L2 table mapping the given next hop MAC to
      * the given output port.
+     * <p>
+     * This is called by the routing policy methods below to establish L2-based
+     * forwarding inside the fabric, e.g., when deviceId is a leaf switch and
+     * nextHopMac is the one of a spine switch.
      *
      * @param deviceId   the device
      * @param nexthopMac the next hop (destination) mac
@@ -461,7 +466,7 @@ public class Ipv6RoutingComponent {
 
     /**
      * Set up L2 nexthop rules of a device to providing forwarding inside the
-     * fabric, i.e. between laf and spine switches.
+     * fabric, i.e. between leaf and spine switches.
      *
      * @param deviceId the device ID
      */
