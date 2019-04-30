@@ -50,6 +50,7 @@ control IngressPipeImpl (inout parsed_headers_t hdr,
         hdr.ndp_option.value = target_mac;
         hdr.ipv6.next_hdr = PROTO_ICMPV6;
         standard_metadata.egress_spec = standard_metadata.ingress_port;
+        local_metadata.skip_l2 = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
@@ -304,7 +305,7 @@ control IngressPipeImpl (inout parsed_headers_t hdr,
                 }
             }
         }
-        if (standard_metadata.drop != 1w1) {
+        if (!local_metadata.skip_l2 && standard_metadata.drop != 1w1) {
             if (!l2_exact_table.apply().hit) {
                 l2_ternary_table.apply();
             }

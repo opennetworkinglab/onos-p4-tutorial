@@ -138,6 +138,7 @@ header ndp_option_t {
 //Custom metadata definition
 struct local_metadata_t {
     bool is_multicast;
+    bool skip_l2;
     ipv6_addr_t next_srv6_sid;
     bit<8> ip_proto;
     bit<8> icmp_type;
