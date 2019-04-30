@@ -55,9 +55,9 @@ On the Mininet CLI:
 ```
 mininet> h2 ping h3
 PING 2001:2:3::1(2001:2:3::1) 56 data bytes
-From 2001:1:2::a icmp_seq=1 Destination unreachable: Address unreachable
-From 2001:1:2::a icmp_seq=2 Destination unreachable: Address unreachable
-From 2001:1:2::a icmp_seq=3 Destination unreachable: Address unreachable
+From 2001:1:2::1 icmp_seq=1 Destination unreachable: Address unreachable
+From 2001:1:2::1 icmp_seq=2 Destination unreachable: Address unreachable
+From 2001:1:2::1 icmp_seq=3 Destination unreachable: Address unreachable
 ...
 ```
 
@@ -302,7 +302,7 @@ onos> hosts -s
 id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:bmv2:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
 id=00:00:00:00:00:1B/None, mac=00:00:00:00:00:1B, locations=[device:bmv2:leaf1/4], vlan=None, ip(s)=[2001:1:1::b]
 id=00:00:00:00:00:1C/None, mac=00:00:00:00:00:1C, locations=[device:bmv2:leaf1/5], vlan=None, ip(s)=[2001:1:1::c]
-id=00:00:00:00:00:20/None, mac=00:00:00:00:00:20, locations=[device:bmv2:leaf1/6], vlan=None, ip(s)=[2001:1:2::a]
+id=00:00:00:00:00:20/None, mac=00:00:00:00:00:20, locations=[device:bmv2:leaf1/6], vlan=None, ip(s)=[2001:1:2::1]
 id=00:00:00:00:00:30/None, mac=00:00:00:00:00:30, locations=[device:bmv2:leaf2/3], vlan=None, ip(s)=[2001:1:3::1]
 id=00:00:00:00:00:40/None, mac=00:00:00:00:00:40, locations=[device:bmv2:leaf2/4], vlan=None, ip(s)=[2001:1:4::1]
 ```
