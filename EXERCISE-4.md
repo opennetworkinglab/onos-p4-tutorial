@@ -200,6 +200,8 @@ Using the ONOS UI, you can observe which paths are being used for the ping packe
 - Press `a` until you see "Port stats (packets/second)"
 - Press `l` to show device labels
 
+![Ping Test](img/srv6-ping-1.png)
+
 Once you determine which of the spines your packets are being hashed to (and it could be both),
 you should insert a set of SRv6 policies that sends the ping packets via the other spine (or
 the spine of your choice).
@@ -230,6 +232,8 @@ This command will match on traffic to the last segment on the specified device (
 `leaf1`). You can update the command to specific more specific match criteria as extra credit.
 
 You can confirm that your rule has been added using a variant of the following:
+
+![SRv6 Ping Test](img/srv6-ping-2.png)
 
 (HINT: Make sure to update the tableId to match the one in your P4 program.)
 ```
