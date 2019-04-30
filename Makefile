@@ -1,3 +1,7 @@
+ONOS_VERSION = 2.1.0-rc7
+ONOS_MD5 = 6ca21242cf837a726cfbcc637107026b
+ONOS_URL = http://repo1.maven.org/maven2/org/onosproject/onos-releases/$(ONOS_VERSION)/onos-$(ONOS_VERSION).tar.gz
+ONOS_TAR_PATH = ~/onos.tar.gz
 APP_OAR = app/target/srv6-tutorial-1.0-SNAPSHOT.oar
 
 p4:
@@ -40,3 +44,13 @@ reset:
 	-sudo rm -rf app/target
 	-sudo mn -c
 	-sudo rm -rf /tmp/bmv2-*
+
+$(ONOS_TAR_PATH):
+	touch $(ONOS_TAR_PATH)
+
+LOCAL_ONOS_MD5 = $(shell md5sum $(ONOS_TAR_PATH) | awk '{print $$1}')
+onos-version-check: $(ONOS_TAR_PATH)
+	@if [ $(LOCAL_ONOS_MD5) = $(ONOS_MD5) ]; then echo "ONOS is already up to date"; exit 1; fi
+
+onos-upgrade: onos-version-check
+	curl $(ONOS_URL) -o $(ONOS_TAR_PATH)
