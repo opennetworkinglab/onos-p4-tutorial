@@ -198,7 +198,7 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="MODIFY ME",
             match_fields={
-                # Ternary match.
+                # Exact match.
                 "MODIFY ME - MATCH FIELD NAME": pkt[Ether].dst
             },
             action_name="MODIFY ME",

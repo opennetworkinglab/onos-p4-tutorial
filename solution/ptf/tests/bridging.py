@@ -198,7 +198,7 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
         self.insert(self.helper.build_table_entry(
             table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
-                # Ternary match.
+                # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
             },
             action_name="IngressPipeImpl.set_output_port",
