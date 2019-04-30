@@ -15,9 +15,9 @@ As a start, in this exercise you will learn how to:
    P4Runtime packet-in/out
 
 To accomplish this you will be asked to apply simple changes to the starter P4
-code to add support for packet-in, validate the P4 changes by means of PTF-based
+code to add support for packet-in, validate the P4 changes using PTF-based
 data plane unit tests, and finally, apply changes to the pipeconf Java
-implementation to let ONOS built-in apps perform topology discovery using
+implementation to enable ONOS's built-in apps perform topology discovery using
 packet-in/out.
 
 ## Controller packet I/O with P4Runtime
@@ -61,14 +61,14 @@ pipeline parser.
 
 The P4 starter code already provides support for the following capabilities:
 
-* Parser for `packet_out` header (if ingress port is the CPU one)
-* Emit of `packet_in` header in the deparser as the first one.
-* For packet-out, skip ingress pipeline processing, and set egress port as
-  specified in the `packet_out` header;
-* ACL-like table with all ternary match fields and action to clone
-  packets to the CPU port and hence generate a packet-in;
+* Parse the `packet_out` header (if the ingress port is the CPU one)
+* Emit the `packet_in` header as the first one in the deparser
+* Skip ingress pipeline processing for packet-outs and set the egress port to
+  the one specified in the `packet-out` header
+* Provide an ACL-like table with ternary match fields and an action to clone
+  packets to the CPU port (used to generate a packet-ins)
 
-One piece is missing to have complete packet-in support and you have to modify
+One piece is missing to provide complete packet-in support, and you have to modify
 the P4 program to implement it:
 
 1. Open `p4src/main.p4`;
@@ -91,8 +91,8 @@ running some PTF tests. But first, you need to apply a few simple changes to the
 test case implementation.
 
 Open file `ptf/tests/packetio.py` and modify wherever requested (look for `TODO
-EXERCISE 1`). This test file provides two test case, for packet-in and
-packet-out. In both test cases, you will have to modify the implementation to
+EXERCISE 1`). This test file provides two test cases: one for packet-in and
+one for packet-out. In both test cases, you will have to modify the implementation to
 use the same name for P4Runtime entities as specified in the P4Info file
 obtained after compiling the P4 program (`p4src/build/p4info.txt`).
 
@@ -124,9 +124,9 @@ When running PTF tests, multiple files are produced that you can use to spot bug
 
 ### 3. Modify ONOS pipeline interpreter
 
-The `PipelineInterpreter` is the ONOS driver behavior used to map, among other
-things, the ONOS representation of packet-in/out, with one compliant with the P4
-implementation.
+The `PipelineInterpreter` is the ONOS driver behavior used to map the ONOS
+representation of packet-in/out to one that is consistent with your P4
+pipeline (along with other similar mappings).
 
 Specifically, to use services like LLDP-based link discovery, ONOS built-in
 apps need to be able to set the output port of a packet-out and access the
@@ -153,13 +153,14 @@ In the following, you will be asked to apply a few simple changes to the
 The last command will trigger a build of the P4 program if necessary. The P4
 compiler outputs (`bmv2.json` and `p4info.txt`) are symlinked in the app
 resource folder (`app/src/main/resources`) and will be included in the ONOS app
-binary.
+binary. The copy that gets included in the ONOS app will be the one that gets
+deployed by ONOS to the device after the connection is initiated.
 
 ### 4. Start ONOS
 
 In a terminal window, type:
 
-```
+```bash
 $ make onos-run
 ```
 
@@ -192,9 +193,9 @@ INFO  [AtomixClusterStore] Updated node 127.0.0.1 state to READY
 ```
 
 To **verify that all required apps have been activated**, run the following
-command to access the ONOS CLI:
+command in a new terminal window to access the ONOS CLI:
 
-```
+```bash
 make onos-cli
 ```
 
@@ -229,18 +230,21 @@ This is definitely more apps than what defined in `$ONOS_APPS`. That's
 because each app in ONOS can define other apps as dependencies. When loading an
 app, ONOS automatically resolve dependencies and loads all other required apps.
 
+To quit out of the ONOS CLI, use `Ctrl-D`. This will just end the CLI process and
+will not stop the ONOS process.
+
 **Restart ONOS in case of errors**
 
 If anything goes wrong and you need to kill/restart ONOS, press `Ctrl+C` in the
 same terminal window where you started ONOS (and the log is printed).
-alternatively, you can use command `make reset`. To restart ONOS execute `make
+Alternatively, you can use command `make reset`. To restart ONOS, execute `make
 onos-run`.
 
 ### 5. Load app and register pipeconf
 
-On a second terminal window, type:
+In the second terminal window, type:
 
-```
+```bash
 $ make app-reload
 ```
 
@@ -249,7 +253,7 @@ This command will uploads to ONOS and activate the app binary previously built
 
 After the app has been activated, you should see the following messages in the
 log signaling that the pipeconf has been registered and the different app
-components have been started:
+components have been started (in the first window, running ONOS):
 
 ```
 INFO  [PiPipeconfManager] New pipeconf registered: org.p4.srv6-tutorial (fingerprint=...)
@@ -263,13 +267,15 @@ command:
 onos> pipeconfs
 ```
 
+HINT: Use `make onos-cli` to start the ONOS CLI.
+
 **Reloading the app after the first time**
 
 If another instance of the same app is running, the command `make app-reload`
 will first deactivate the running instance and load the new one.
 
 To apply new changes to the P4 program or app implementation, feel free to use
-`make app-build && make app-reload` as many times as you want. The app already
+`make app-build app-reload` as many times as you want. The app already
 includes logic to clean up any table entries and other forwarding state from
 ONOS at each reload.
 
@@ -277,7 +283,7 @@ ONOS at each reload.
 
 On a third terminal window, type:
 
-```
+```bash
 $ make topo
 ```
 
@@ -303,9 +309,9 @@ $ bm-log leaf1
 Now that ONOS and Mininet are running, it's time to let ONOS know how to reach
 the 4 switches and control them.
 
-On a fourth terminal window, type:
+On a fourth terminal window (or your second window if you are conserving shells), type:
 
-```
+```bash
 $ make netcfg
 ```
 
@@ -397,7 +403,7 @@ to exercise step 3.
 while ONOS supports reloading the pipeconf with a modified one (e.g., with
 updated `bmv2.json` and `p4info.txt`), the version of ONOS used in this tutorial
 (2.1.0, the most recent at the time of writing) does not support reloading the
-pipeconf behavior classes, in  which case the old classes will still be used.
+pipeconf behavior classes, in which case the old classes will still be used.
 For this reason, to reload a modified version of `InterpreterImpl.java`, you
 need to kill ONOS first.
 
