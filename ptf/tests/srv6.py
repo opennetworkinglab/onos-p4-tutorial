@@ -127,10 +127,10 @@ class Srv6InsertTest(P4RuntimeTest):
         # Fill table_name and match fields to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_transit",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
-                "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
+                "MODIFY ME": (pkt[IPv6].dst, 128)
             },
             action_name=action_name,
             action_params=actions_params
@@ -229,12 +229,12 @@ class Srv6TransitTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="MODIFY ME",
             match_fields={
                 # Longest prefix match (value, prefix length)
-                "hdr.ipv6.dst_addr": (my_sid, 128)
+                "MODIFY ME": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="MODIFY ME"
         ))
         # ---- END SOLUTION ----
 
@@ -326,12 +326,12 @@ class Srv6EndTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="MODIFY ME",
             match_fields={
                 # Longest prefix match (value, prefix length)
-                "hdr.ipv6.dst_addr": (my_sid, 128)
+                "MODIFY ME": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="MODIFY ME"
         ))
         # ---- END SOLUTION ----
 
@@ -429,12 +429,12 @@ class Srv6EndPspTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="MODIFY ME",
             match_fields={
                 # Longest prefix match (value, prefix length)
-                "hdr.ipv6.dst_addr": (my_sid, 128)
+                "MODIFY ME": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="MODIFY ME"
         ))
         # ---- END SOLUTION ----
 

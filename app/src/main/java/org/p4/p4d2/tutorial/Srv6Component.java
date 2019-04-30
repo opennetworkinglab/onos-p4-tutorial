@@ -57,7 +57,9 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
  */
 @Component(
         immediate = true,
-        enabled = true,
+        // TODO EXERCISE 4
+        // set to true when ready
+        enabled = false,
         service = Srv6Component.class
 )
 public class Srv6Component {
@@ -138,7 +140,7 @@ public class Srv6Component {
         // TODO EXERCISE 4
         // Fill in the table ID for the SRv6 my segment identifier table
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_my_sid";
+        String tableId = "MODIFY ME";
         // ---- END SOLUTION ----
 
         // TODO EXERCISE 4
@@ -146,19 +148,17 @@ public class Srv6Component {
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
                 .matchLpm(
-                        PiMatchFieldId.of("hdr.ipv6.dst_addr"),
+                        PiMatchFieldId.of("MODIFY ME"),
                         mySid.toOctets(), 128)
                 .build();
 
         PiTableAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.srv6_end"))
+                .withId(PiActionId.of("MODIFY ME"))
                 .build();
         // ---- END SOLUTION ----
 
         FlowRule myStationRule = Utils.buildFlowRule(
-                deviceId, appId,
-                "FabricIngress.srv6_my_sid",
-                match, action);
+                deviceId, appId, tableId, match, action);
 
         flowRuleService.applyFlowRules(myStationRule);
     }
@@ -181,14 +181,14 @@ public class Srv6Component {
         // TODO EXERCISE 4
         // Fill in the table ID for the SRv6 transit table.
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_transit";
+        String tableId = "MODIFY ME";
         // ---- END SOLUTION ----
 
         // TODO EXERCISE 4
-        // Modify match field, action id, and action parameter to match your P4Info.
+        // Modify match field, action id, and action parameters to match your P4Info.
         // ---- START SOLUTION ----
         PiCriterion match = PiCriterion.builder()
-                .matchLpm(PiMatchFieldId.of("hdr.ipv6.dst_addr"), destIp.toOctets(), prefixLength)
+                .matchLpm(PiMatchFieldId.of("MODIFY ME"), destIp.toOctets(), prefixLength)
                 .build();
 
         List<PiActionParam> actionParams = Lists.newArrayList();
@@ -217,9 +217,10 @@ public class Srv6Component {
      * @param deviceId device ID
      */
     public void clearSrv6InsertRules(DeviceId deviceId) {
-        // TODO: fill in the table ID for the SRv6 transit table
+        // TODO EXERCISE 4
+        // Fill in the table ID for the SRv6 transit table
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_transit";
+        String tableId = "MODIFY ME";
         // ---- END SOLUTION ----
 
         FlowRuleOperations.Builder ops = FlowRuleOperations.builder();

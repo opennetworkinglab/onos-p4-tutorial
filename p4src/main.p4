@@ -158,26 +158,15 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     /*
-     * SRv6 my sid table.
-     * Process the packet if the destination IP is the segemnt Id(sid) of this device.
-     * This table will decrement the "segment left" field from the Srv6 header and set destination
-     * IP address to next segment.
+     * TODO EXERCISE 4
+     * Create a SRv6 my sid table and SRv6 endpoint action. The table should process the packet if
+     * the destination IP is the Segemnt Id (sid) of this device.
+     *
+     * For matches in this table, the switch should perform the "end" action which will decrement the
+     * "segment left" field from the Srv6 header and set destination IP address to next segment.
+     *
+     * You can create direct counter for this table if you would like to track flow stats in ONOS.
      */
-    action srv6_end() {
-        hdr.srv6h.segment_left = hdr.srv6h.segment_left - 1;
-        hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
-    }
-
-    direct_counter(CounterType.packets_and_bytes) srv6_my_sid_table_counter;
-    table srv6_my_sid {
-      key = {
-          hdr.ipv6.dst_addr: lpm;
-      }
-      actions = {
-          srv6_end;
-      }
-      counters = srv6_my_sid_table_counter;
-    }
 
     /*
      * SRv6 transit table.
@@ -225,8 +214,8 @@ control FabricIngress (inout parsed_headers_t hdr,
     direct_counter(CounterType.packets_and_bytes) srv6_transit_table_counter;
     table srv6_transit {
       key = {
-          hdr.ipv6.dst_addr: lpm;
-          //TODO what other fields do we want to match?
+          // TODO EXERCISE 4
+          // match fields for SRv6 transit rules; we'll start with the destination IP address
       }
       actions = {
           srv6_t_insert_2;
@@ -289,20 +278,16 @@ control FabricIngress (inout parsed_headers_t hdr,
         }
         if (l2_my_station.apply().hit) {
             if (hdr.ipv6.isValid()) {
-                if (srv6_my_sid.apply().hit) {
-                    // PSP logic -- enabled for all packets
-                    if (hdr.srv6h.isValid() && hdr.srv6h.segment_left == 0) {
-                        srv6_pop();
-                    }
-                } else {
-                    srv6_transit.apply();
-                }
                 l3_table.apply();
                 if(hdr.ipv6.hop_limit == 0) {
                     drop();
                 }
             }
         }
+        // TODO EXERCISE 4
+        // Insert logic to match the SRv6 My SID and Transit tables as well as logic to perform PSP behavior
+        // HINT: This logic belongs somewhere between checking the switch's my station table and applying the routing
+        //       table.
         if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) {
             if (!l2_exact_table.apply().hit) {
                 l2_ternary_table.apply();
