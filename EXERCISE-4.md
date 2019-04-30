@@ -131,7 +131,7 @@ There are four tests in `srv6.py`:
 
 You should be able to find `TODO EXERCISE 4` in [srv6.py](ptf/tests/srv6.py) with some hints.
 
-After finish all `TODO` we should be able to run the test and see the following messages:
+After finish all TODOs we should be able to run the test and see the following messages:
 
 ```
 sdn@onos-p4-tutorial:~/tutorial/ptf$ make srv6
@@ -160,6 +160,15 @@ srv6.Srv6InsertTest ... tcpv6 3 SIDs ... udpv6 3 SIDs ... icmpv6 3 SIDs ... tcpv
 Ran 1 test in 0.067s
 
 OK
+```
+
+**Check for regressions**
+
+At this point, our P4 program should be complete. We can check to make sure that we haven't
+broken anything from the previous exercises by running all of tests from the `ptf` directory:
+
+```bash
+make test
 ```
 
 Now we have shown that we can install basic rules and pass SRv6 traffic using BMv2.
@@ -202,9 +211,9 @@ Using the ONOS UI, you can observe which paths are being used for the ping packe
 
 <img src="img/srv6-ping-1.png" alt="Ping Test" width="344"/>
 
-Once you determine which of the spines your packets are being hashed to (and it could be both),
-you should insert a set of SRv6 policies that sends the ping packets via the other spine (or
-the spine of your choice).
+Once you determine which of the spines your packets are being hashed to (and it could be both, with
+requests and replies taking different paths), you should insert a set of SRv6 policies that sends the
+ping packets via the other spine (or the spine of your choice).
 
 To add new SRv6 policies, you should use the `srv6-insert` command.
 
@@ -217,23 +226,21 @@ Note: In our topology, the SID for spine1 is `3:201:2::` and the SID for spine2 
 For example, to add a policy that forwards traffic between h2 and h4 though spine1 and leaf2, you can use
 the following command:
 
-- Insert the SRv6 policy from h2 to h4 on leaf1
+- Insert the SRv6 policy from h2 to h4 on leaf1 (through spine1 and leaf2)
 ```
-onos> srv6-insert device:leaf1 3:201:2:: 3:102:2:: 2001:1:4::1                                  16:12:15
+onos> srv6-insert device:leaf1 3:201:2:: 3:102:2:: 2001:1:4::1
 Installing path on device device:leaf1: 3:201:2::, 3:102:2::, 2001:1:4::1
 ```
-- Insert the SRv6 policy from h4 to h2 on leaf2
+- Insert the SRv6 policy from h4 to h2 on leaf2 (through spine1 and leaf1)
 ```
-onos> srv6-insert device:leaf2 3:201:2:: 3:101:2:: 2001:1:2::1                                  16:12:23
+onos> srv6-insert device:leaf2 3:201:2:: 3:101:2:: 2001:1:2::1
 Installing path on device device:leaf2: 3:201:2::, 3:101:2::, 2001:1:2::1
 ```
 
-This command will match on traffic to the last segment on the specified device (e.g. match `2001:1:4::1` on
-`leaf1`). You can update the command to specific more specific match criteria as extra credit.
+These commands will match on traffic to the last segment on the specified device (e.g. match `2001:1:4::1` on
+`leaf1`). You can update the command to allow for more specific match criteria as extra credit.
 
 You can confirm that your rule has been added using a variant of the following:
-
-<img src="img/srv6-ping-2.png" alt="SRv6 Ping Test" width="335"/>
 
 (HINT: Make sure to update the tableId to match the one in your P4 program.)
 ```
@@ -252,7 +259,9 @@ onos> flows any device:leaf1 | grep tableId=FabricIngress.srv6_transit
 
 You should now return to the ONOS UI to confirm that traffic is flowing through the specified spine.
 
-### Notes
+<img src="img/srv6-ping-2.png" alt="SRv6 Ping Test" width="335"/>
+
+### Debugging and Clean Up
 
 If you need to remove your SRv6 policies, you can use the `srv6-clear` command to clear all SRv6 policies
 from a specific device. For example to remove flows from `leaf1`, use this command:
@@ -264,8 +273,6 @@ onos> srv6-clear device:leaf1
 To verify that the device inserts the correct SRv6 header, you can use **Wireshark** to capture packet from
 each device port.
 
-For example, if you want to capture packet from second port of leaf1, use `leaf1-eth2` as interface name:
+For example, if you want to capture packet from port 1 of spine1, capture packets from interface `spine1-eth1`.
 
-```
-sudo wireshark -i leaf1-eth2
-```
+NOTE: `spine1-eth1` is connected to leaf1, and `spine1-eth2` is connected to leaf2; spine two follows the same pattern.
