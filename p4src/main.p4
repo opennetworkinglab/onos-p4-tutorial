@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Foundation
+ * Copyright 2019-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {
-    // TODO add counters
     // TODO add name annotations to avoid using the fully qualified names
     //  for tables etc.
 
@@ -52,6 +51,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         fabric_metadata.skip_l2 = true;
     }
 
+    direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
     table ndp_reply {
         key = {
             hdr.ndp.target_addr: exact;
@@ -59,6 +59,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         actions = {
             ndp_advertisement;
         }
+        counters = ndp_reply_table_counter;
     }
 
     action set_output_port(port_num_t port_num) {
@@ -67,11 +68,10 @@ control FabricIngress (inout parsed_headers_t hdr,
 
     action set_multicast_group(group_id_t gid) {
         standard_metadata.mcast_grp = gid;
-        fabric_metadata.is_multicast = _TRUE;
+        fabric_metadata.is_multicast = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) l2_exact_table_counter;
-
     table l2_exact_table {
         key = {
             hdr.ethernet.dst_addr: exact;
@@ -85,7 +85,6 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
-
     table l2_ternary_table {
         key = {
             hdr.ethernet.dst_addr: ternary;
@@ -98,6 +97,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         counters = l2_ternary_table_counter;
     }
 
+    direct_counter(CounterType.packets_and_bytes) l2_my_station_table_counter;
     table l2_my_station {
         key = {
             hdr.ethernet.dst_addr: exact;
@@ -105,6 +105,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         actions = {
             NoAction;
         }
+        counters = l2_my_station_table_counter;
     }
 
     action set_l2_next_hop(mac_addr_t dmac) {
@@ -139,6 +140,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
     }
 
+    direct_counter(CounterType.packets_and_bytes) srv6_my_sid_table_counter;
     table srv6_my_sid {
       key = {
           hdr.ipv6.dst_addr: lpm;
@@ -146,6 +148,7 @@ control FabricIngress (inout parsed_headers_t hdr,
       actions = {
           srv6_end;
       }
+      counters = srv6_my_sid_table_counter;
     }
 
     action insert_srv6h_header(bit<8> num_segments) {
@@ -187,7 +190,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.srv6_list[2].segment_id = s1;
     }
 
-
+    direct_counter(CounterType.packets_and_bytes) srv6_transit_table_counter;
     table srv6_transit {
       key = {
           hdr.ipv6.dst_addr: lpm;
@@ -198,6 +201,7 @@ control FabricIngress (inout parsed_headers_t hdr,
           srv6_t_insert_3;
           // Extra credit: set a metadata field, then push label stack in egress
       }
+      counters = srv6_transit_table_counter;
     }
 
     action clone_to_cpu() {
@@ -291,7 +295,7 @@ control FabricEgress (inout parsed_headers_t hdr,
         }
         // ---- END SOLUTION ----
 
-        if (fabric_metadata.is_multicast == _TRUE
+        if (fabric_metadata.is_multicast == true
              && standard_metadata.ingress_port == standard_metadata.egress_port) {
             mark_to_drop();
         }

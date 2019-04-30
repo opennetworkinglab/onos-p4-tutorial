@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Foundation
+ * Copyright 2019-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,9 +137,8 @@ header ndp_option_t {
 
 //Custom metadata definition
 struct fabric_metadata_t {
-    _BOOL is_multicast;
-    _BOOL is_l3_fwd;
-    _BOOL skip_l2;
+    bool is_multicast;
+    bool skip_l2;
     ipv6_addr_t next_srv6_sid;
     bit<8> ip_proto;
     bit<8> icmp_type;
