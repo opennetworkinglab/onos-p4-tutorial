@@ -68,8 +68,8 @@ class PacketOutTest(P4RuntimeTest):
             packet_out_msg = self.helper.build_packet_out(
                 payload=str(pkt),
                 metadata={
-                    "egress_port": outport,
-                    "_pad": 0
+                    "MODIFY ME": outport,
+                    "MODIFY ME": 0
                 })
             # ---- END SOLUTION ----
 
@@ -111,12 +111,12 @@ class PacketInTest(P4RuntimeTest):
         # clone_to_cpu action.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "hdr.ethernet.ether_type": (eth_type, 0xffff)
+                "MODIFY ME": (eth_type, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="MODIFY ME",
             priority=DEFAULT_PRIORITY
         ))
         # ---- END SOLUTION ----
@@ -129,8 +129,8 @@ class PacketInTest(P4RuntimeTest):
             exp_packet_in_msg = self.helper.build_packet_in(
                 payload=str(pkt),
                 metadata={
-                    "ingress_port": inport,
-                    "_pad": 0
+                    "MODIFY ME": inport,
+                    "MODIFY ME": 0
                 })
             # ---- END SOLUTION ----
 
