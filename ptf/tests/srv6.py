@@ -100,12 +100,18 @@ class Srv6InsertTest(P4RuntimeTest):
     @autocleanup
     def testPacket(self, pkt, sid_list, next_hop_mac):
 
-        # Consider pkt's mac dst addr as my station address
+        # TODO EXERCISE 4
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
+
+        # Add entry to "My Station" table. Consider the given pkt's eth dst addr
+        # as myStationMac address.
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_my_station",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
             action_name="NoAction"
         ))
@@ -123,9 +129,6 @@ class Srv6InsertTest(P4RuntimeTest):
         action_name = "IngressPipeImpl.srv6_t_insert_%d" % sid_len
         actions_params = {"s%d" % (x + 1): sid_list[x] for x in range(sid_len)}
 
-        # TODO EXERCISE 4
-        # Fill table_name and match fields to match your P4Info file.
-        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="MODIFY ME",
             match_fields={
@@ -135,23 +138,23 @@ class Srv6InsertTest(P4RuntimeTest):
             action_name=action_name,
             action_params=actions_params
         ))
-        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="IngressPipeImpl.ecmp_selector",
+            act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
-                # List of tuples (action name, action param dict)
-                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
+                # List of tuples (action name, {action param: value})
+                ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
 
         # Now that we inserted the SRv6 header, we expect the pkt's IPv6 dst
         # addr to be the first on the SID list.
+        # Match on L3 routing table.
         first_sid = sid_list[0]
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l3_table",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (first_sid, 128)
@@ -161,16 +164,18 @@ class Srv6InsertTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
-                # Exact match.
-                "hdr.ethernet.dst_addr": next_hop_mac
+                # Exact match
+                "MODIFY ME": next_hop_mac
             },
-            action_name="IngressPipeImpl.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
+
+        # ---- END SOLUTION ----
 
         # Build expected packet from the given one...
         exp_pkt = insert_srv6_header(pkt.copy(), sid_list)
@@ -214,20 +219,23 @@ class Srv6TransitTest(P4RuntimeTest):
     @autocleanup
     def testPacket(self, pkt, next_hop_mac, my_sid):
 
-        # Consider pkt's mac dst addr as my station address
+        # TODO EXERCISE 4
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
+
+        # Add entry to "My Station" table. Consider the given pkt's eth dst addr
+        # as myStationMac address.
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_my_station",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
             action_name="NoAction"
         ))
 
         # This should be missed, this is plain IPv6 routing.
-        # TODO EXERCISE 4
-        # Fill table_name, match fields and action name to match your P4Info file.
-        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="MODIFY ME",
             match_fields={
@@ -236,21 +244,20 @@ class Srv6TransitTest(P4RuntimeTest):
             },
             action_name="MODIFY ME"
         ))
-        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="IngressPipeImpl.ecmp_selector",
+            act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
 
         # Map pkt's IPv6 dst addr to group
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l3_table",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
@@ -260,16 +267,18 @@ class Srv6TransitTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
-                # Exact match.
-                "hdr.ethernet.dst_addr": next_hop_mac
+                # Exact match
+                "MODIFY ME": next_hop_mac
             },
-            action_name="IngressPipeImpl.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
+
+        # ---- END SOLUTION ----
 
         # Build expected packet from the given one...
         exp_pkt = pkt.copy()
@@ -311,20 +320,23 @@ class Srv6EndTest(P4RuntimeTest):
     @autocleanup
     def testPacket(self, pkt, sid_list, next_hop_mac, my_sid):
 
-        # Consider pkt's mac dst addr as my station address
+        # TODO EXERCISE 4
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
+
+        # Add entry to "My Station" table. Consider the given pkt's eth dst addr
+        # as myStationMac address.
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_my_station",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
             action_name="NoAction"
         ))
 
         # This should be matched, we want SRv6 end behavior to be applied.
-        # TODO EXERCISE 4
-        # Fill table_name, match fields and action name to match your P4Info file.
-        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="MODIFY ME",
             match_fields={
@@ -333,15 +345,14 @@ class Srv6EndTest(P4RuntimeTest):
             },
             action_name="MODIFY ME"
         ))
-        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="IngressPipeImpl.ecmp_selector",
+            act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
 
@@ -349,7 +360,7 @@ class Srv6EndTest(P4RuntimeTest):
         # next SID in the list, we should route based on that.
         next_sid = sid_list[1]
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l3_table",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (next_sid, 128)
@@ -359,16 +370,18 @@ class Srv6EndTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
-                # Exact match.
-                "hdr.ethernet.dst_addr": next_hop_mac
+                # Exact match
+                "MODIFY ME": next_hop_mac
             },
-            action_name="IngressPipeImpl.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
+
+        # ---- END SOLUTION ----
 
         # Build expected packet from the given one...
         exp_pkt = pkt.copy()
@@ -414,20 +427,23 @@ class Srv6EndPspTest(P4RuntimeTest):
     @autocleanup
     def testPacket(self, pkt, sid_list, next_hop_mac, my_sid):
 
-        # Consider pkt's mac dst addr as my station address
+        # TODO EXERCISE 4
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
+        # ---- START SOLUTION ----
+
+        # Add entry to "My Station" table. Consider the given pkt's eth dst addr
+        # as myStationMac address.
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_my_station",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
             action_name="NoAction"
         ))
 
         # This should be matched, we want SRv6 end behavior to be applied.
-        # TODO EXERCISE 4
-        # Fill table_name, match fields and action name to match your P4Info file.
-        # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="MODIFY ME",
             match_fields={
@@ -436,22 +452,21 @@ class Srv6EndPspTest(P4RuntimeTest):
             },
             action_name="MODIFY ME"
         ))
-        # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="IngressPipeImpl.ecmp_selector",
+            act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
 
         # Map pkt's IPv6 dst addr to group
         next_sid = sid_list[1]
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l3_table",
+            table_name="MODIFY ME",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (next_sid, 128)
@@ -461,16 +476,18 @@ class Srv6EndPspTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="IngressPipeImpl.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
-                # Exact match.
-                "hdr.ethernet.dst_addr": next_hop_mac
+                # Exact match
+                "MODIFY ME": next_hop_mac
             },
-            action_name="IngressPipeImpl.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
+
+        # ---- END SOLUTION ----
 
         # Build expected packet from the given one...
         exp_pkt = pkt.copy()

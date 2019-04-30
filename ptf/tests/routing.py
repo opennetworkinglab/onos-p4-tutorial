@@ -82,7 +82,7 @@ class IPv6RoutingTest(P4RuntimeTest):
             act_prof_name="MODIFY ME",
             group_id=1,
             actions=[
-                # List of tuples (action name, action param dict)
+                # List of tuples (action name, {action param: value})
                 ("MODIFY ME", {"MODIFY ME": next_hop_mac}),
             ]
         ))
