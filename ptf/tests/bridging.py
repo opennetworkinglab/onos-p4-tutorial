@@ -83,13 +83,13 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "MODIFY ME": (
-                    "MODIFY ME",
-                    "MODIFY ME")
+                "MODIFY ME - MATCH FIELD NAME": (
+                    "MODIFY ME - MATCH VALUE",
+                    "MODIFY ME - MATCH MASK")
             },
             action_name="MODIFY ME",
             action_params={
-                "MODIFY ME": mcast_group_id
+                "MODIFY ME - PARAM NAME": mcast_group_id
             },
             priority=DEFAULT_PRIORITY
         ))
@@ -104,13 +104,13 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Ternary match (value, mask)
-                "MODIFY ME": (
-                    "MODIFY ME",
-                    "MODIFY ME")
+                "MODIFY ME - MATCH FIELD NAME": (
+                    "MODIFY ME - MATCH VALUE",
+                    "MODIFY ME - MATCH MASK")
             },
             action_name="MODIFY ME",
             action_params={
-                "MODIFY ME": mcast_group_id
+                "MODIFY ME - PARAM NAME": mcast_group_id
             },
             priority=DEFAULT_PRIORITY
         ))
@@ -199,11 +199,11 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "MODIFY ME": pkt[Ether].dst
+                "MODIFY ME - MATCH FIELD NAME": pkt[Ether].dst
             },
             action_name="MODIFY ME",
             action_params={
-                "MODIFY ME": self.port2
+                "MODIFY ME - PARAM NAME": self.port2
             }
         ))
         # ---- END SOLUTION ----
@@ -276,11 +276,11 @@ class BridgingTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "MODIFY ME": pkt[Ether].dst
+                "MODIFY ME - MATCH FIELD NAME": pkt[Ether].dst
             },
             action_name="MODIFY ME",
             action_params={
-                "MODIFY ME": self.port2
+                "MODIFY ME - PARAM NAME": self.port2
             }
         ))
         # ---- END SOLUTION ----
@@ -297,11 +297,11 @@ class BridgingTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "MODIFY ME": pkt2[Ether].dst
+                "MODIFY ME - MATCH FIELD NAME": pkt2[Ether].dst
             },
             action_name="MODIFY ME",
             action_params={
-                "MODIFY ME": self.port1
+                "MODIFY ME - PARAM NAME": self.port1
             }
         ))
         # ---- END SOLUTION ----

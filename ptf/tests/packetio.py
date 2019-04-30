@@ -68,8 +68,8 @@ class PacketOutTest(P4RuntimeTest):
             packet_out_msg = self.helper.build_packet_out(
                 payload=str(pkt),
                 metadata={
-                    "MODIFY ME": outport,
-                    "MODIFY ME": 0
+                    "MODIFY ME - HEADER FIELD NAME": outport,
+                    "MODIFY ME - HEADER FIELD NAME": 0
                 })
             # ---- END SOLUTION ----
 
@@ -114,7 +114,7 @@ class PacketInTest(P4RuntimeTest):
             table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "MODIFY ME": (eth_type, 0xffff)
+                "MODIFY ME - MATCH FIELD NAME": (eth_type, 0xffff)
             },
             action_name="MODIFY ME",
             priority=DEFAULT_PRIORITY
@@ -129,8 +129,8 @@ class PacketInTest(P4RuntimeTest):
             exp_packet_in_msg = self.helper.build_packet_in(
                 payload=str(pkt),
                 metadata={
-                    "MODIFY ME": inport,
-                    "MODIFY ME": 0
+                    "MODIFY ME - HEADER FIELD NAME": inport,
+                    "MODIFY ME - HEADER FIELD NAME": 0
                 })
             # ---- END SOLUTION ----
 
