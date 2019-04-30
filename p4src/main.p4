@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Foundation
+ * Copyright 2019-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {
-    // TODO add counters
     // TODO add name annotations to avoid using the fully qualified names
     //  for tables etc.
 
@@ -35,6 +34,10 @@ control FabricIngress (inout parsed_headers_t hdr,
         mark_to_drop();
     }
 
+    /*
+     * NDP reply table and actions.
+     * Handles NDP router solicitation message and send router advertisement to the sender.
+     */
     action ndp_advertisement(mac_addr_t router_mac) {
         hdr.ethernet.src_addr = router_mac;
         hdr.ethernet.dst_addr = IPV6_MCAST_01;
@@ -52,6 +55,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         fabric_metadata.skip_l2 = true;
     }
 
+    direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
     table ndp_reply {
         key = {
             hdr.ndp.target_addr: exact;
@@ -59,19 +63,19 @@ control FabricIngress (inout parsed_headers_t hdr,
         actions = {
             ndp_advertisement;
         }
+        counters = ndp_reply_table_counter;
     }
+
+    /*
+     * L2 exact table.
+     * Matches the destination Ethernet address and set output port or do nothing.
+     */
 
     action set_output_port(port_num_t port_num) {
         standard_metadata.egress_spec = port_num;
     }
 
-    action set_multicast_group(group_id_t gid) {
-        standard_metadata.mcast_grp = gid;
-        fabric_metadata.is_multicast = _TRUE;
-    }
-
     direct_counter(CounterType.packets_and_bytes) l2_exact_table_counter;
-
     table l2_exact_table {
         key = {
             hdr.ethernet.dst_addr: exact;
@@ -84,8 +88,17 @@ control FabricIngress (inout parsed_headers_t hdr,
         counters = l2_exact_table_counter;
     }
 
-    direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
+    /*
+     * L2 ternary table.
+     * Handles broadcast address (FF:FF:FF:FF:FF:FF) and multicast address (33:33:*:*:*:*) and set multicast
+     * group id for the packet.
+     */
+    action set_multicast_group(group_id_t gid) {
+        standard_metadata.mcast_grp = gid;
+        fabric_metadata.is_multicast = true;
+    }
 
+    direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
     table l2_ternary_table {
         key = {
             hdr.ethernet.dst_addr: ternary;
@@ -98,6 +111,13 @@ control FabricIngress (inout parsed_headers_t hdr,
         counters = l2_ternary_table_counter;
     }
 
+    /*
+     * L2 my station table.
+     * Hit when Ethernet destination address is the device address.
+     * This table won't do anything to the packet, but the pipeline will use the result (table.hit)
+     * to decide how to process the packet.
+     */
+    direct_counter(CounterType.packets_and_bytes) l2_my_station_table_counter;
     table l2_my_station {
         key = {
             hdr.ethernet.dst_addr: exact;
@@ -105,8 +125,13 @@ control FabricIngress (inout parsed_headers_t hdr,
         actions = {
             NoAction;
         }
+        counters = l2_my_station_table_counter;
     }
 
+    /*
+     * L3 table.
+     * Handles IPv6 routing. Pickup a next hop address according to hash of packet header fields (5-tuple).
+     */
     action set_l2_next_hop(mac_addr_t dmac) {
         hdr.ethernet.src_addr = hdr.ethernet.dst_addr;
         hdr.ethernet.dst_addr = dmac;
@@ -134,11 +159,18 @@ control FabricIngress (inout parsed_headers_t hdr,
       counters = l3_table_counter;
     }
 
+    /*
+     * SRv6 my sid table.
+     * Process the packet if the destination IP is the segemnt Id(sid) of this device.
+     * This table will decrement the "segment left" field from the Srv6 header and set destination
+     * IP address to next segment.
+     */
     action srv6_end() {
         hdr.srv6h.segment_left = hdr.srv6h.segment_left - 1;
         hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
     }
 
+    direct_counter(CounterType.packets_and_bytes) srv6_my_sid_table_counter;
     table srv6_my_sid {
       key = {
           hdr.ipv6.dst_addr: lpm;
@@ -146,8 +178,13 @@ control FabricIngress (inout parsed_headers_t hdr,
       actions = {
           srv6_end;
       }
+      counters = srv6_my_sid_table_counter;
     }
 
+    /*
+     * SRv6 transit table.
+     * Inserts the SRv6 header to the IPv6 header of the packet based on the destination IP address.
+     */
     action insert_srv6h_header(bit<8> num_segments) {
         hdr.srv6h.setValid();
         hdr.srv6h.next_hdr = hdr.ipv6.next_hdr;
@@ -187,7 +224,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.srv6_list[2].segment_id = s1;
     }
 
-
+    direct_counter(CounterType.packets_and_bytes) srv6_transit_table_counter;
     table srv6_transit {
       key = {
           hdr.ipv6.dst_addr: lpm;
@@ -198,8 +235,13 @@ control FabricIngress (inout parsed_headers_t hdr,
           srv6_t_insert_3;
           // Extra credit: set a metadata field, then push label stack in egress
       }
+      counters = srv6_transit_table_counter;
     }
 
+    /*
+     * ACL table.
+     * Clone the packet to the CPU (PacketIn) or drop the packet.
+     */
     action clone_to_cpu() {
         clone3(CloneType.I2E, CPU_CLONE_SESSION_ID, standard_metadata);
     }
@@ -291,7 +333,7 @@ control FabricEgress (inout parsed_headers_t hdr,
         }
         // ---- END SOLUTION ----
 
-        if (fabric_metadata.is_multicast == _TRUE
+        if (fabric_metadata.is_multicast == true
              && standard_metadata.ingress_port == standard_metadata.egress_port) {
             mark_to_drop();
         }
