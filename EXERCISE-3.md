@@ -168,7 +168,7 @@ For IPv6 traffic, you will need to include the source and destination IPv6
 addresses as well as the IPv6 flow label as part of the ECMP hash, but you are
 free to include other parts of the packet header if you would like. For example,
 you could include the rest of the 5-tuple (i.e. L4 proto and ports); the L4
-ports are parsed into `fabric_metadata` if would like to use them. For more
+ports are parsed into `local_metadata` if would like to use them. For more
 details on the required fields for hashing IPv6 traffic, see RFC6438.
 
 You can compile the program using `make p4` from the `tutorial` directory.

@@ -123,25 +123,25 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
 
         # ACL entry to clone ARPs
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (ARP_ETH_TYPE, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
         # ACL entry to clone NDP Neighbor Solicitation
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (IPV6_ETH_TYPE, 0xffff),
-                "fabric_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
-                "fabric_metadata.icmp_type": (NS_ICMPV6_TYPE, 0xff)
+                "local_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
+                "local_metadata.icmp_type": (NS_ICMPV6_TYPE, 0xff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
@@ -215,25 +215,25 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
 
         # ACL entry to clone ARPs
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (ARP_ETH_TYPE, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
         # ACL entry to clone NDP Neighbor Solicitation
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (IPV6_ETH_TYPE, 0xffff),
-                "fabric_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
-                "fabric_metadata.icmp_type": (NA_ICMPV6_TYPE, 0xff)
+                "local_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
+                "local_metadata.icmp_type": (NA_ICMPV6_TYPE, 0xff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 

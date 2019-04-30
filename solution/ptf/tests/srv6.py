@@ -102,7 +102,7 @@ class Srv6InsertTest(P4RuntimeTest):
 
         # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="IngressPipeImpl.l2_my_station",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
@@ -113,21 +113,21 @@ class Srv6InsertTest(P4RuntimeTest):
         # Insert SRv6 header when matching the pkt's IPV6 dst addr.
         # Action name an params are generated based on the number of SIDs given.
         # For example, with 2 SIDs:
-        # action_name = FabricIngress.srv6_t_insert_2
+        # action_name = IngressPipeImpl.srv6_t_insert_2
         # action_params = {
         #     "s1": sid[0],
         #     "s2": sid[1]
         # }
         sid_len = len(sid_list)
 
-        action_name = "FabricIngress.srv6_t_insert_%d" % sid_len
+        action_name = "IngressPipeImpl.srv6_t_insert_%d" % sid_len
         actions_params = {"s%d" % (x + 1): sid_list[x] for x in range(sid_len)}
 
         # TODO EXERCISE 4
         # Fill table_name and match fields to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_transit",
+            table_name="IngressPipeImpl.srv6_transit",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
@@ -139,11 +139,11 @@ class Srv6InsertTest(P4RuntimeTest):
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="IngressPipeImpl.ecmp_selector",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
             ]
         ))
 
@@ -151,7 +151,7 @@ class Srv6InsertTest(P4RuntimeTest):
         # addr to be the first on the SID list.
         first_sid = sid_list[0]
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="IngressPipeImpl.l3_table",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (first_sid, 128)
@@ -161,12 +161,12 @@ class Srv6InsertTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -216,7 +216,7 @@ class Srv6TransitTest(P4RuntimeTest):
 
         # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="IngressPipeImpl.l2_my_station",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
@@ -229,28 +229,28 @@ class Srv6TransitTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="IngressPipeImpl.srv6_my_sid",
             match_fields={
                 # Longest prefix match (value, prefix length)
                 "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="IngressPipeImpl.srv6_end"
         ))
         # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="IngressPipeImpl.ecmp_selector",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
             ]
         ))
 
         # Map pkt's IPv6 dst addr to group
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="IngressPipeImpl.l3_table",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
@@ -260,12 +260,12 @@ class Srv6TransitTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -313,7 +313,7 @@ class Srv6EndTest(P4RuntimeTest):
 
         # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="IngressPipeImpl.l2_my_station",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
@@ -326,22 +326,22 @@ class Srv6EndTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="IngressPipeImpl.srv6_my_sid",
             match_fields={
                 # Longest prefix match (value, prefix length)
                 "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="IngressPipeImpl.srv6_end"
         ))
         # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="IngressPipeImpl.ecmp_selector",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
             ]
         ))
 
@@ -349,7 +349,7 @@ class Srv6EndTest(P4RuntimeTest):
         # next SID in the list, we should route based on that.
         next_sid = sid_list[1]
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="IngressPipeImpl.l3_table",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (next_sid, 128)
@@ -359,12 +359,12 @@ class Srv6EndTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -416,7 +416,7 @@ class Srv6EndPspTest(P4RuntimeTest):
 
         # Consider pkt's mac dst addr as my station address
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="IngressPipeImpl.l2_my_station",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
@@ -429,29 +429,29 @@ class Srv6EndPspTest(P4RuntimeTest):
         # Fill table_name, match fields and action name to match your P4Info file.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.srv6_my_sid",
+            table_name="IngressPipeImpl.srv6_my_sid",
             match_fields={
                 # Longest prefix match (value, prefix length)
                 "hdr.ipv6.dst_addr": (my_sid, 128)
             },
-            action_name="FabricIngress.srv6_end"
+            action_name="IngressPipeImpl.srv6_end"
         ))
         # ---- END SOLUTION ----
 
         # Insert ECMP group with only one member (next_hop_mac)
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="IngressPipeImpl.ecmp_selector",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
             ]
         ))
 
         # Map pkt's IPv6 dst addr to group
         next_sid = sid_list[1]
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="IngressPipeImpl.l3_table",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (next_sid, 128)
@@ -461,12 +461,12 @@ class Srv6EndPspTest(P4RuntimeTest):
 
         # Map next_hop_mac to output port
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }

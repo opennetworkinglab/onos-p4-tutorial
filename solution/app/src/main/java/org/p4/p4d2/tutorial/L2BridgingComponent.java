@@ -225,14 +225,14 @@ public class L2BridgingComponent {
 
         // Action: set multicast group id (the same used )
         final PiAction setMcastGroupAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
+                .withId(PiActionId.of("IngressPipeImpl.set_multicast_group"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("gid"),
                         DEFAULT_BROADCAST_GROUP_ID))
                 .build();
 
         //  Build 2 flow rules.
-        final String tableId = "FabricIngress.l2_ternary_table";
+        final String tableId = "IngressPipeImpl.l2_ternary_table";
 
         final FlowRule rule1 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
@@ -268,7 +268,7 @@ public class L2BridgingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
-        final String tableId = "FabricIngress.l2_exact_table";
+        final String tableId = "IngressPipeImpl.l2_exact_table";
         // Match exactly on the host MAC address.
         final MacAddress hostMac = host.mac();
         final PiCriterion hostMacCriterion = PiCriterion.builder()
@@ -278,7 +278,7 @@ public class L2BridgingComponent {
 
         // Action: set output port
         final PiAction l2UnicastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_output_port"))
+                .withId(PiActionId.of("IngressPipeImpl.set_output_port"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("port_num"),
                         port.toLong()))

@@ -111,12 +111,12 @@ class PacketInTest(P4RuntimeTest):
         # clone_to_cpu action.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (eth_type, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
         # ---- END SOLUTION ----

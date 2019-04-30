@@ -190,7 +190,7 @@ public class Ipv6RoutingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
-        final String tableId = "FabricIngress.l2_my_station";
+        final String tableId = "IngressPipeImpl.l2_my_station";
 
         final PiCriterion match = PiCriterion.builder()
                 .matchExact(
@@ -226,7 +226,7 @@ public class Ipv6RoutingComponent {
                                                 Collection<MacAddress> nextHopMacs,
                                                 DeviceId deviceId) {
 
-        String actionProfileId = "FabricIngress.ecmp_selector";
+        String actionProfileId = "IngressPipeImpl.ecmp_selector";
 
         final List<PiAction> actions = Lists.newArrayList();
 
@@ -235,10 +235,10 @@ public class Ipv6RoutingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
-        final String tableId = "FabricIngress.l3_table";
+        final String tableId = "IngressPipeImpl.l3_table";
         for (MacAddress nextHopMac : nextHopMacs) {
             final PiAction action = PiAction.builder()
-                    .withId(PiActionId.of("FabricIngress.set_l2_next_hop"))
+                    .withId(PiActionId.of("IngressPipeImpl.set_l2_next_hop"))
                     .withParameter(new PiActionParam(
                             // Action param name.
                             PiActionParamId.of("dmac"),
@@ -270,7 +270,7 @@ public class Ipv6RoutingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
-        final String tableId = "FabricIngress.l3_table";
+        final String tableId = "IngressPipeImpl.l3_table";
         final PiCriterion match = PiCriterion.builder()
                 .matchLpm(
                         PiMatchFieldId.of("hdr.ipv6.dst_addr"),
@@ -304,7 +304,7 @@ public class Ipv6RoutingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
-        final String tableId = "FabricIngress.l2_exact_table";
+        final String tableId = "IngressPipeImpl.l2_exact_table";
         final PiCriterion match = PiCriterion.builder()
                 .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
                             nexthopMac.toBytes())
@@ -312,7 +312,7 @@ public class Ipv6RoutingComponent {
 
 
         final PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_output_port"))
+                .withId(PiActionId.of("IngressPipeImpl.set_output_port"))
                 .withParameter(new PiActionParam(
                         PiActionParamId.of("port_num"),
                         outPort.toLong()))

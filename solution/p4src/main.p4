@@ -24,9 +24,9 @@
 #define CPU_CLONE_SESSION_ID 99
 
 
-control FabricIngress (inout parsed_headers_t hdr,
-                       inout fabric_metadata_t fabric_metadata,
-                       inout standard_metadata_t standard_metadata) {
+control IngressPipeImpl (inout parsed_headers_t hdr,
+                         inout local_metadata_t local_metadata,
+                         inout standard_metadata_t standard_metadata) {
 
     action drop() {
         mark_to_drop();
@@ -50,7 +50,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.ndp_option.value = target_mac;
         hdr.ipv6.next_hdr = PROTO_ICMPV6;
         standard_metadata.egress_spec = standard_metadata.ingress_port;
-        fabric_metadata.skip_l2 = true;
+        local_metadata.skip_l2 = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
@@ -93,7 +93,7 @@ control FabricIngress (inout parsed_headers_t hdr,
      */
     action set_multicast_group(group_id_t gid) {
         standard_metadata.mcast_grp = gid;
-        fabric_metadata.is_multicast = true;
+        local_metadata.is_multicast = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
@@ -146,9 +146,9 @@ control FabricIngress (inout parsed_headers_t hdr,
           hdr.ipv6.src_addr: selector;
           hdr.ipv6.flow_label: selector;
           // the rest of the 5-tuple is optional per RFC6438
-          fabric_metadata.ip_proto: selector;
-          fabric_metadata.l4_src_port: selector;
-          fabric_metadata.l4_dst_port: selector;
+          local_metadata.ip_proto: selector;
+          local_metadata.l4_src_port: selector;
+          local_metadata.l4_dst_port: selector;
       }
       actions = {
           set_l2_next_hop;
@@ -165,7 +165,7 @@ control FabricIngress (inout parsed_headers_t hdr,
      */
     action srv6_end() {
         hdr.srv6h.segment_left = hdr.srv6h.segment_left - 1;
-        hdr.ipv6.dst_addr = fabric_metadata.next_srv6_sid;
+        hdr.ipv6.dst_addr = local_metadata.next_srv6_sid;
     }
 
     direct_counter(CounterType.packets_and_bytes) srv6_my_sid_table_counter;
@@ -251,10 +251,10 @@ control FabricIngress (inout parsed_headers_t hdr,
             hdr.ethernet.dst_addr: ternary;
             hdr.ethernet.src_addr: ternary;
             hdr.ethernet.ether_type: ternary;
-            fabric_metadata.ip_proto: ternary;
-            fabric_metadata.icmp_type: ternary;
-            fabric_metadata.l4_src_port: ternary;
-            fabric_metadata.l4_dst_port: ternary;
+            local_metadata.ip_proto: ternary;
+            local_metadata.icmp_type: ternary;
+            local_metadata.l4_src_port: ternary;
+            local_metadata.l4_dst_port: ternary;
         }
         actions = {
             clone_to_cpu;
@@ -303,7 +303,7 @@ control FabricIngress (inout parsed_headers_t hdr,
                 }
             }
         }
-        if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) {
+        if (!local_metadata.skip_l2 && standard_metadata.drop != 1w1) {
             if (!l2_exact_table.apply().hit) {
                 l2_ternary_table.apply();
             }
@@ -313,9 +313,9 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 }
 
-control FabricEgress (inout parsed_headers_t hdr,
-                      inout fabric_metadata_t fabric_metadata,
-                      inout standard_metadata_t standard_metadata) {
+control EgressPipeImpl (inout parsed_headers_t hdr,
+                        inout local_metadata_t local_metadata,
+                        inout standard_metadata_t standard_metadata) {
     apply {
         // TODO EXERCISE 1
         // Implement logic such that if the packet is to be forwarded to the CPU
@@ -331,7 +331,7 @@ control FabricEgress (inout parsed_headers_t hdr,
         }
         // ---- END SOLUTION ----
 
-        if (fabric_metadata.is_multicast == true
+        if (local_metadata.is_multicast == true
              && standard_metadata.ingress_port == standard_metadata.egress_port) {
             mark_to_drop();
         }
@@ -339,10 +339,10 @@ control FabricEgress (inout parsed_headers_t hdr,
 }
 
 V1Switch(
-    FabricParser(),
-    FabricVerifyChecksum(),
-    FabricIngress(),
-    FabricEgress(),
-    FabricComputeChecksum(),
-    FabricDeparser()
+    ParserImpl(),
+    VerifyChecksumImpl(),
+    IngressPipeImpl(),
+    EgressPipeImpl(),
+    ComputeChecksumImpl(),
+    DeparserImpl()
 ) main;

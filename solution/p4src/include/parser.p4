@@ -19,10 +19,10 @@
 
 #include "define.p4"
 
-parser FabricParser (packet_in packet,
-                     out parsed_headers_t hdr,
-                     inout fabric_metadata_t fabric_metadata,
-                     inout standard_metadata_t standard_metadata)
+parser ParserImpl (packet_in packet,
+                   out parsed_headers_t hdr,
+                   inout local_metadata_t local_metadata,
+                   inout standard_metadata_t standard_metadata)
 {
     state start {
         transition select(standard_metadata.ingress_port) {
@@ -48,7 +48,7 @@ parser FabricParser (packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        fabric_metadata.ip_proto = hdr.ipv4.protocol;
+        local_metadata.ip_proto = hdr.ipv4.protocol;
         //Need header verification?
         transition select(hdr.ipv4.protocol) {
             PROTO_TCP: parse_tcp;
@@ -60,7 +60,7 @@ parser FabricParser (packet_in packet,
 
     state parse_ipv6 {
         packet.extract(hdr.ipv6);
-        fabric_metadata.ip_proto = hdr.ipv6.next_hdr;
+        local_metadata.ip_proto = hdr.ipv6.next_hdr;
         transition select(hdr.ipv6.next_hdr) {
             PROTO_TCP: parse_tcp;
             PROTO_UDP: parse_udp;
@@ -84,7 +84,7 @@ parser FabricParser (packet_in packet,
 
     state mark_current_srv6 {
         // current metadata
-        fabric_metadata.next_srv6_sid = hdr.srv6_list.last.segment_id;
+        local_metadata.next_srv6_sid = hdr.srv6_list.last.segment_id;
         transition check_last_srv6;
     }
 
@@ -112,27 +112,27 @@ parser FabricParser (packet_in packet,
 
     state parse_tcp {
         packet.extract(hdr.tcp);
-        fabric_metadata.l4_src_port = hdr.tcp.src_port;
-        fabric_metadata.l4_dst_port = hdr.tcp.dst_port;
+        local_metadata.l4_src_port = hdr.tcp.src_port;
+        local_metadata.l4_dst_port = hdr.tcp.dst_port;
         transition accept;
     }
 
     state parse_udp {
         packet.extract(hdr.udp);
-        fabric_metadata.l4_src_port = hdr.udp.src_port;
-        fabric_metadata.l4_dst_port = hdr.udp.dst_port;
+        local_metadata.l4_src_port = hdr.udp.src_port;
+        local_metadata.l4_dst_port = hdr.udp.dst_port;
         transition accept;
     }
 
     state parse_icmp {
         packet.extract(hdr.icmp);
-        fabric_metadata.icmp_type = hdr.icmp.type;
+        local_metadata.icmp_type = hdr.icmp.type;
         transition accept;
     }
 
     state parse_icmpv6 {
         packet.extract(hdr.icmpv6);
-        fabric_metadata.icmp_type = hdr.icmpv6.type;
+        local_metadata.icmp_type = hdr.icmpv6.type;
         transition select(hdr.icmpv6.type) {
             ICMP6_TYPE_NS: parse_ndp;
             ICMP6_TYPE_NA: parse_ndp;
@@ -152,7 +152,7 @@ parser FabricParser (packet_in packet,
     }
 }
 
-control FabricDeparser(packet_out packet, in parsed_headers_t hdr) {
+control DeparserImpl(packet_out packet, in parsed_headers_t hdr) {
     apply {
         packet.emit(hdr.packet_in);
         packet.emit(hdr.ethernet);

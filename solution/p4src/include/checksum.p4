@@ -17,8 +17,8 @@
 #ifndef __CHECKSUM__
 #define __CHECKSUM__
 
-control FabricComputeChecksum(inout parsed_headers_t hdr,
-                              inout fabric_metadata_t meta)
+control ComputeChecksumImpl(inout parsed_headers_t hdr,
+                            inout local_metadata_t meta)
 {
     apply {
         update_checksum(hdr.ndp.isValid(),
@@ -42,8 +42,8 @@ control FabricComputeChecksum(inout parsed_headers_t hdr,
     }
 }
 
-control FabricVerifyChecksum(inout parsed_headers_t hdr,
-                             inout fabric_metadata_t meta)
+control VerifyChecksumImpl(inout parsed_headers_t hdr,
+                           inout local_metadata_t meta)
 {
     apply {}
 }

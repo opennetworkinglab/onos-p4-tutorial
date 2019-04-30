@@ -138,7 +138,7 @@ public class Srv6Component {
         // TODO EXERCISE 4
         // Fill in the table ID for the SRv6 my segment identifier table
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_my_sid";
+        String tableId = "IngressPipeImpl.srv6_my_sid";
         // ---- END SOLUTION ----
 
         // TODO EXERCISE 4
@@ -151,7 +151,7 @@ public class Srv6Component {
                 .build();
 
         PiTableAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.srv6_end"))
+                .withId(PiActionId.of("IngressPipeImpl.srv6_end"))
                 .build();
         // ---- END SOLUTION ----
 
@@ -179,7 +179,7 @@ public class Srv6Component {
         // TODO EXERCISE 4
         // Fill in the table ID for the SRv6 transit table.
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_transit";
+        String tableId = "IngressPipeImpl.srv6_transit";
         // ---- END SOLUTION ----
 
         // TODO EXERCISE 4
@@ -198,7 +198,7 @@ public class Srv6Component {
         }
 
         PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.srv6_t_insert_" + segmentList.size()))
+                .withId(PiActionId.of("IngressPipeImpl.srv6_t_insert_" + segmentList.size()))
                 .withParameters(actionParams)
                 .build();
         // ---- END SOLUTION ----
@@ -217,7 +217,7 @@ public class Srv6Component {
     public void clearSrv6InsertRules(DeviceId deviceId) {
         // TODO: fill in the table ID for the SRv6 transit table
         // ---- START SOLUTION ----
-        String tableId = "FabricIngress.srv6_transit";
+        String tableId = "IngressPipeImpl.srv6_transit";
         // ---- END SOLUTION ----
 
         FlowRuleOperations.Builder ops = FlowRuleOperations.builder();

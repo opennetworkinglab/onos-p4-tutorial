@@ -64,7 +64,7 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_my_station",
+            table_name="IngressPipeImpl.l2_my_station",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
@@ -79,11 +79,11 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_act_prof_group(
-            act_prof_name="FabricIngress.ecmp_selector",
+            act_prof_name="IngressPipeImpl.ecmp_selector",
             group_id=1,
             actions=[
                 # List of tuples (action name, action param dict)
-                ("FabricIngress.set_l2_next_hop", {"dmac": next_hop_mac}),
+                ("IngressPipeImpl.set_l2_next_hop", {"dmac": next_hop_mac}),
             ]
         ))
         # ---- END SOLUTION ----
@@ -94,7 +94,7 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l3_table",
+            table_name="IngressPipeImpl.l3_table",
             match_fields={
                 # LPM match (value, prefix)
                 "hdr.ipv6.dst_addr": (pkt[IPv6].dst, 128)
@@ -109,12 +109,12 @@ class IPv6RoutingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match
                 "hdr.ethernet.dst_addr": next_hop_mac
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -145,12 +145,12 @@ class NdpReplyGenTest(P4RuntimeTest):
         # Insert entry to transform NDP NA packets for the given target address
         # (match), to NDP NA packets with the given target MAC address (action)
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.ndp_reply_table",
+            table_name="IngressPipeImpl.ndp_reply_table",
             match_fields={
                 # Exact match.
                 "hdr.ndp.target_addr": switch_ip
             },
-            action_name="FabricIngress.ndp_ns_to_na",
+            action_name="IngressPipeImpl.ndp_ns_to_na",
             action_params={
                 "target_mac": target_mac
             }

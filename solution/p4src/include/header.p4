@@ -136,7 +136,7 @@ header ndp_option_t {
 }
 
 //Custom metadata definition
-struct fabric_metadata_t {
+struct local_metadata_t {
     bool is_multicast;
     bool skip_l2;
     ipv6_addr_t next_srv6_sid;

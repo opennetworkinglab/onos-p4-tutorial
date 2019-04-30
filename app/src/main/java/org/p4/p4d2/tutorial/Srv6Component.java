@@ -200,7 +200,7 @@ public class Srv6Component {
         }
 
         PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.srv6_t_insert_" + segmentList.size()))
+                .withId(PiActionId.of("IngressPipeImpl.srv6_t_insert_" + segmentList.size()))
                 .withParameters(actionParams)
                 .build();
         // ---- END SOLUTION ----

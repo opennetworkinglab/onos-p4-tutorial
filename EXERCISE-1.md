@@ -82,7 +82,7 @@ One piece is missing to provide complete packet-in support, and you have to modi
 the P4 program to implement it:
 
 1. Open `p4src/main.p4`;
-2. Look for the implementation of the egress pipeline (`control FabricEgress`);
+2. Look for the implementation of the egress pipeline (`control EgressPipeImpl`);
 3. Modify the code where requested (look for `TODO EXERCISE 1`);
 4. Compile the modified P4 program using the `make p4` command. Make sure to
    address any compiler errors before continuing.
@@ -425,11 +425,11 @@ show all flow rules installed so far on device `leaf1`:
 ```
 onos> flows -s any device:leaf1
 deviceId=device:leaf1, flowRuleCount=5
-    ADDED, ..., table=FabricIngress.acl, priority=40000, selector=[ETH_TYPE:ipv6, IP_PROTO:58, ICMPV6_TYPE:136], treatment=[immediate=[FabricIngress.clone_to_cpu()]]
-    ADDED, ..., table=FabricIngress.acl, priority=40000, selector=[ETH_TYPE:arp], treatment=[immediate=[FabricIngress.clone_to_cpu()]]
-    ADDED, ..., table=FabricIngress.acl, priority=40000, selector=[ETH_TYPE:ipv6, IP_PROTO:58, ICMPV6_TYPE:135], treatment=[immediate=[FabricIngress.clone_to_cpu()]]
-    ADDED, ..., table=FabricIngress.acl, priority=40000, selector=[ETH_TYPE:lldp], treatment=[immediate=[FabricIngress.clone_to_cpu()]]
-    ADDED, ..., table=FabricIngress.acl, priority=40000, selector=[ETH_TYPE:bddp], treatment=[immediate=[FabricIngress.clone_to_cpu()]]
+    ADDED, ..., table=IngressPipeImpl.acl, priority=40000, selector=[ETH_TYPE:ipv6, IP_PROTO:58, ICMPV6_TYPE:136], treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]
+    ADDED, ..., table=IngressPipeImpl.acl, priority=40000, selector=[ETH_TYPE:arp], treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]
+    ADDED, ..., table=IngressPipeImpl.acl, priority=40000, selector=[ETH_TYPE:ipv6, IP_PROTO:58, ICMPV6_TYPE:135], treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]
+    ADDED, ..., table=IngressPipeImpl.acl, priority=40000, selector=[ETH_TYPE:lldp], treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]
+    ADDED, ..., table=IngressPipeImpl.acl, priority=40000, selector=[ETH_TYPE:bddp], treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]
 ```
 
 These flow rules are the result of the translation of flow objectives generated
@@ -438,7 +438,7 @@ automatically for each device by the `hostprovider` and `lldpprovider` apps.
 `hostprovider` app provides host discovery capabilities by sniffing ARP
 (`selector=[ETH_TYPE:arp]`) and NDP packets (`selector=[ETH_TYPE:ipv6,
 IP_PROTO:58, ICMPV6_TYPE:...]`), which are cloned to the controller
-(`treatment=[immediate=[FabricIngress.clone_to_cpu()]]`). Similarly,
+(`treatment=[immediate=[IngressPipeImpl.clone_to_cpu()]]`). Similarly,
 `lldpprovider` generates flow objectives to sniff LLDP and BBDP packets
 (`selector=[ETH_TYPE:lldp]` and `selector=[ETH_TYPE:bbdp]`) periodically emitted
 on all devices' ports as P4Runtime packet-outs, allowing automatic link
@@ -501,7 +501,7 @@ the BMv2 switch in Mininet with name "leaf1".
 On the BMv2 CLI prompt, type the following command:
 
 ```
-RuntimeCmd: table_dump FabricIngress.acl
+RuntimeCmd: table_dump IngressPipeImpl.acl
 ```
 
 You should see exactly 5 entries, each one corresponding to a flow rule
@@ -515,12 +515,12 @@ Match key:
 * ethernet.dst_addr                    : TERNARY   000000000000 &&& 000000000000
 * ethernet.src_addr                    : TERNARY   000000000000 &&& 000000000000
 * ethernet.ether_type                  : TERNARY   0806 &&& ffff
-* scalars.fabric_metadata_t.ip_proto   : TERNARY   00 &&& 00
-* scalars.fabric_metadata_t.icmp_type  : TERNARY   00 &&& 00
-* scalars.fabric_metadata_t.l4_src_port: TERNARY   0000 &&& 0000
-* scalars.fabric_metadata_t.l4_dst_port: TERNARY   0000 &&& 0000
+* scalars.local_metadata_t.ip_proto   : TERNARY   00 &&& 00
+* scalars.local_metadata_t.icmp_type  : TERNARY   00 &&& 00
+* scalars.local_metadata_t.l4_src_port: TERNARY   0000 &&& 0000
+* scalars.local_metadata_t.l4_dst_port: TERNARY   0000 &&& 0000
 Priority: 2147443646
-Action entry: FabricIngress.clone_to_cpu -
+Action entry: IngressPipeImpl.clone_to_cpu -
 ```
 
 Note how the ONOS selector `[ETH_TYPE:arp]` has been translated to an entry

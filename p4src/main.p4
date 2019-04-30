@@ -24,13 +24,49 @@
 #define CPU_CLONE_SESSION_ID 99
 
 
-control FabricIngress (inout parsed_headers_t hdr,
-                       inout fabric_metadata_t fabric_metadata,
-                       inout standard_metadata_t standard_metadata) {
+control IngressPipeImpl (inout parsed_headers_t hdr,
+                         inout local_metadata_t local_metadata,
+                         inout standard_metadata_t standard_metadata) {
 
     action drop() {
         mark_to_drop();
     }
+
+    /*
+     * TODO EXERCISE 2
+     * Create L2 table(s). Our solution uses two tables: one for unicast and one for broadcast/multicast.
+     * We have already provided both the unicast (set_output_port) and multicast (set_multicast_group)
+     * actions for you to use.
+     * If you choose to use two tables, what should the default actions be for each table?
+     * You should add a direct counter to the table if you would like to see flow stats in ONOS.
+     * Matches the destination Ethernet address and set output port or do nothing.
+     */
+    action set_output_port(port_num_t port_num) {
+        standard_metadata.egress_spec = port_num;
+    }
+    action set_multicast_group(group_id_t gid) {
+        standard_metadata.mcast_grp = gid;
+        local_metadata.is_multicast = true;
+    }
+
+
+    /*
+     * TODO EXERCISE 3
+     * Create a L2 my station table.
+     * Hit when Ethernet destination address is the device address.
+     * This table won't do anything to the packet, but the pipeline will use the result (table.hit)
+     * to decide how to process the packet. (Use NoAction for flow entries.)
+     */
+
+
+    /*
+     * TODO EXERCISE 3
+     * Create a L3 table for IPv6 routing.
+     * Handles IPv6 routing. Pick a next hop address according to hash of packet header fields
+     * (IPv6 source/destination address and the flow label).
+     */
+    // action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
+    // direct_counter(CounterType.packets_and_bytes) l3_table_counter;
 
     /*
      * NDP reply table and actions.
@@ -50,7 +86,7 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.ndp_option.value = target_mac;
         hdr.ipv6.next_hdr = PROTO_ICMPV6;
         standard_metadata.egress_spec = standard_metadata.ingress_port;
-        fabric_metadata.skip_l2 = true;
+        local_metadata.skip_l2 = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
@@ -63,43 +99,6 @@ control FabricIngress (inout parsed_headers_t hdr,
         }
         counters = ndp_reply_table_counter;
     }
-
-    /*
-     * TODO EXERCISE 2
-     * Create L2 table(s). Our solution uses two tables: one for unicast and one for broadcast/multicast.
-     * We have already provided both the unicast (set_output_port) and multicast (set_multicast_group)
-     * actions for you to use.
-     * If you choose to use two tables, what should the default actions be for each table?
-     * You should add a direct counter to the table if you would like to see flow stats in ONOS.
-     * Matches the destination Ethernet address and set output port or do nothing.
-     */
-    action set_output_port(port_num_t port_num) {
-        standard_metadata.egress_spec = port_num;
-    }
-    action set_multicast_group(group_id_t gid) {
-        standard_metadata.mcast_grp = gid;
-        fabric_metadata.is_multicast = true;
-    }
-
-
-    /*
-     * TODO EXERCISE 3
-     * Create a L2 my station table.
-     * Hit when Ethernet destination address is the device address.
-     * This table won't do anything to the packet, but the pipeline will use the result (table.hit)
-     * to decide how to process the packet. (Use NoAction for flow entries.)
-     */
-
-
-    /*
-     * TODO EXERCISE 3
-     * Create a L3 table for IPv6 routing.
-     * Handles IPv6 routing. Pick a next hop address according to hash of packet header fields
-     * (IPv6 source/destination address and the flow label).
-     */
-    action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
-    direct_counter(CounterType.packets_and_bytes) l3_table_counter;
-
 
     /*
      * TODO EXERCISE 4
@@ -156,20 +155,21 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.srv6_list[2].segment_id = s1;
     }
 
-    direct_counter(CounterType.packets_and_bytes) srv6_transit_table_counter;
-    table srv6_transit {
-      key = {
-          // TODO EXERCISE 4
-          // Add match fields for SRv6 transit rules; we'll start with the destination IP address
-      }
-      actions = {
-          srv6_t_insert_2;
-          srv6_t_insert_3;
-          // Extra credit: set a metadata field, then push label stack in egress
-      }
-      counters = srv6_transit_table_counter;
-    }
-    
+    // Uncomment when working on EXERCISE 4
+    // direct_counter(CounterType.packets_and_bytes) srv6_transit_table_counter;
+    // table srv6_transit {
+    //   key = {
+    //       // TODO EXERCISE 4
+    //       // Add match fields for SRv6 transit rules; we'll start with the destination IP address
+    //   }
+    //   actions = {
+    //       srv6_t_insert_2;
+    //       srv6_t_insert_3;
+    //       // Extra credit: set a metadata field, then push label stack in egress
+    //   }
+    //   counters = srv6_transit_table_counter;
+    // }
+
     action srv6_pop() {
       hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
       // SRv6 header is 8 bytes
@@ -201,10 +201,10 @@ control FabricIngress (inout parsed_headers_t hdr,
             hdr.ethernet.dst_addr: ternary;
             hdr.ethernet.src_addr: ternary;
             hdr.ethernet.ether_type: ternary;
-            fabric_metadata.ip_proto: ternary;
-            fabric_metadata.icmp_type: ternary;
-            fabric_metadata.l4_src_port: ternary;
-            fabric_metadata.l4_dst_port: ternary;
+            local_metadata.ip_proto: ternary;
+            local_metadata.icmp_type: ternary;
+            local_metadata.l4_src_port: ternary;
+            local_metadata.l4_dst_port: ternary;
         }
         actions = {
             clone_to_cpu;
@@ -241,9 +241,9 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 }
 
-control FabricEgress (inout parsed_headers_t hdr,
-                      inout fabric_metadata_t fabric_metadata,
-                      inout standard_metadata_t standard_metadata) {
+control EgressPipeImpl (inout parsed_headers_t hdr,
+                        inout local_metadata_t local_metadata,
+                        inout standard_metadata_t standard_metadata) {
     apply {
         // TODO EXERCISE 1
         // Implement logic such that if the packet is to be forwarded to the CPU
@@ -257,7 +257,7 @@ control FabricEgress (inout parsed_headers_t hdr,
         }
         // ---- END SOLUTION ----
 
-        if (fabric_metadata.is_multicast == true
+        if (local_metadata.is_multicast == true
              && standard_metadata.ingress_port == standard_metadata.egress_port) {
             mark_to_drop();
         }
@@ -265,10 +265,10 @@ control FabricEgress (inout parsed_headers_t hdr,
 }
 
 V1Switch(
-    FabricParser(),
-    FabricVerifyChecksum(),
-    FabricIngress(),
-    FabricEgress(),
-    FabricComputeChecksum(),
-    FabricDeparser()
+    ParserImpl(),
+    VerifyChecksumImpl(),
+    IngressPipeImpl(),
+    EgressPipeImpl(),
+    ComputeChecksumImpl(),
+    DeparserImpl()
 ) main;

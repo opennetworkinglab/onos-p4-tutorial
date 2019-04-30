@@ -228,7 +228,7 @@ public class Ipv6RoutingComponent {
                                                 Collection<MacAddress> nextHopMacs,
                                                 DeviceId deviceId) {
 
-        String actionProfileId = "FabricIngress.ecmp_selector";
+        String actionProfileId = "IngressPipeImpl.ecmp_selector";
 
         final List<PiAction> actions = Lists.newArrayList();
 

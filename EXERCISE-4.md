@@ -104,7 +104,7 @@ In addition to the tables, you will also need to write the action for the endpoi
 length 2 and 3, which should be sufficient to get you started.
 
 Once you've finished that, you will need to apply the tables in the `apply` block at the bottom
-of your `FabricEngress` section. You will want to apply the tables after checking that the L2
+of your `EgressPipeImpl` section. You will want to apply the tables after checking that the L2
 destination address matches the switch's, and before the L3 table is applied (because you'll
 want to use the same routing entries to forward traffic after the SRv6 policy is applied). You
 can also apply the PSP behavior as part of your `apply` logic because we will always be applying it
@@ -244,13 +244,13 @@ You can confirm that your rule has been added using a variant of the following:
 
 (HINT: Make sure to update the tableId to match the one in your P4 program.)
 ```
-onos> flows any device:leaf1 | grep tableId=FabricIngress.srv6_transit
+onos> flows any device:leaf1 | grep tableId=IngressPipeImpl.srv6_transit
     id=c000006d73f05e, state=ADDED, bytes=0, packets=0, duration=871, liveType=UNKNOWN, priority=10,
-    tableId=FabricIngress.srv6_transit,
+    tableId=IngressPipeImpl.srv6_transit,
     appId=org.p4.srv6-tutorial,
     selector=[hdr.ipv6.dst_addr=0x20010001000400000000000000000001/128],
     treatment=DefaultTrafficTreatment{immediate=[
-        FabricIngress.srv6_t_insert_3(
+        IngressPipeImpl.srv6_t_insert_3(
             s3=0x20010001000400000000000000000001,
             s1=0x30201000200000000000000000000,
             s2=0x30102000200000000000000000000)],

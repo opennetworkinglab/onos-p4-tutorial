@@ -80,14 +80,14 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_ternary_table",
+            table_name="IngressPipeImpl.l2_ternary_table",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.dst_addr": (
                     "FF:FF:FF:FF:FF:FF",
                     "FF:FF:FF:FF:FF:FF")
             },
-            action_name="FabricIngress.set_multicast_group",
+            action_name="IngressPipeImpl.set_multicast_group",
             action_params={
                 "gid": mcast_group_id
             },
@@ -101,14 +101,14 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_ternary_table",
+            table_name="IngressPipeImpl.l2_ternary_table",
             match_fields={
                 # Ternary match (value, mask)
                 "hdr.ethernet.dst_addr": (
                     "33:33:00:00:00:00",
                     "FF:FF:00:00:00:00")
             },
-            action_name="FabricIngress.set_multicast_group",
+            action_name="IngressPipeImpl.set_multicast_group",
             action_params={
                 "gid": mcast_group_id
             },
@@ -123,25 +123,25 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
 
         # ACL entry to clone ARPs
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (ARP_ETH_TYPE, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
         # ACL entry to clone NDP Neighbor Solicitation
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (IPV6_ETH_TYPE, 0xffff),
-                "fabric_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
-                "fabric_metadata.icmp_type": (NS_ICMPV6_TYPE, 0xff)
+                "local_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
+                "local_metadata.icmp_type": (NS_ICMPV6_TYPE, 0xff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
@@ -196,12 +196,12 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -215,25 +215,25 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
 
         # ACL entry to clone ARPs
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (ARP_ETH_TYPE, 0xffff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
         # ACL entry to clone NDP Neighbor Solicitation
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.acl",
+            table_name="IngressPipeImpl.acl",
             match_fields={
                 # Ternary match.
                 "hdr.ethernet.ether_type": (IPV6_ETH_TYPE, 0xffff),
-                "fabric_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
-                "fabric_metadata.icmp_type": (NA_ICMPV6_TYPE, 0xff)
+                "local_metadata.ip_proto": (ICMPV6_IP_PROTO, 0xff),
+                "local_metadata.icmp_type": (NA_ICMPV6_TYPE, 0xff)
             },
-            action_name="FabricIngress.clone_to_cpu",
+            action_name="IngressPipeImpl.clone_to_cpu",
             priority=DEFAULT_PRIORITY
         ))
 
@@ -273,12 +273,12 @@ class BridgingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port2
             }
@@ -294,12 +294,12 @@ class BridgingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="IngressPipeImpl.l2_exact_table",
             match_fields={
                 # Exact match.
                 "hdr.ethernet.dst_addr": pkt2[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="IngressPipeImpl.set_output_port",
             action_params={
                 "port_num": self.port1
             }

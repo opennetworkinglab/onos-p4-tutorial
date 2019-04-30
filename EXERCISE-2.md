@@ -92,7 +92,7 @@ but you can choose a different approach.
 domains, but you can also add support for VLANs as an extra credit exercise.
 
 After creating your L2 table(s), you will need to apply these tables from the
-`apply` block area of the ingress pipeline (`FabricIngress`).
+`apply` block area of the ingress pipeline (`IngressPipeImpl`).
 
 When done, you can compile the program using `make p4` from the `tutorial`
 directory. Make sure to address any compiler errors before continuing.

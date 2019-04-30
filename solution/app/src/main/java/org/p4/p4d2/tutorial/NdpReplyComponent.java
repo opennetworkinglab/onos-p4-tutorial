@@ -179,7 +179,7 @@ public class NdpReplyComponent {
         PiActionParam paramRouterMac = new PiActionParam(
                 PiActionParamId.of("target_mac"), deviceMac.toBytes());
         PiAction action = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.ndp_ns_to_na"))
+                .withId(PiActionId.of("IngressPipeImpl.ndp_ns_to_na"))
                 .withParameter(paramRouterMac)
                 .build();
 
@@ -193,7 +193,7 @@ public class NdpReplyComponent {
 
         return DefaultFlowRule.builder()
                 .forDevice(deviceId)
-                .forTable(PiTableId.of("FabricIngress.ndp_reply_table"))
+                .forTable(PiTableId.of("IngressPipeImpl.ndp_reply_table"))
                 .fromApp(appId)
                 .makePermanent()
                 .withSelector(selector)

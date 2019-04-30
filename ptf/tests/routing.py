@@ -145,12 +145,12 @@ class NdpReplyGenTest(P4RuntimeTest):
         # Insert entry to transform NDP NA packets for the given target address
         # (match), to NDP NA packets with the given target MAC address (action)
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.ndp_reply_table",
+            table_name="IngressPipeImpl.ndp_reply_table",
             match_fields={
                 # Exact match.
                 "hdr.ndp.target_addr": switch_ip
             },
-            action_name="FabricIngress.ndp_ns_to_na",
+            action_name="IngressPipeImpl.ndp_ns_to_na",
             action_params={
                 "target_mac": target_mac
             }
