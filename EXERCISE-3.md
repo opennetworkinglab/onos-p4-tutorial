@@ -19,13 +19,14 @@ satisfied:
   switch interface/gateway IPv6 addresses, by replying with NDP Neighbor
   Advertisements (NA) notifying their `myStationMac` address;
 * Packets received with Ethernet destination `myStationMac` should be processed
-  through the routing pipeline, otherwise the bridging one;
-* When routing, the P4 program should look at the IPv6 destination address, if a
+  through the routing pipeline (traffic that is not dropped can then be
+  processed through the bridging pipeline);
+* When routing, the P4 program should look at the IPv6 destination address. If a
   matching entry is found, the packet should be forwarded to a given next hop
-  and the packet Ethernet addresses modified accordingly (source set to 
+  and the packet's Ethernet addresses should be modified accordingly (source set to 
   `myStationMac` and destination to the next hop one);
 * When routing packets to a different leaf across the spines, leaf switches
-  should be able to use ECMP do distribute traffic.
+  should be able to use ECMP to distribute traffic.
 
 ### Configuration
 
@@ -46,7 +47,7 @@ file). The same IPv6 addresses are used in the Mininet topology script
 ### Try pinging hosts in different subnets
 
 Similarly to the previous exercise, let's start by using Mininet to verify that
-pinging hosts on different subnets does NOT work. It will be your task to
+pinging between hosts on different subnets does NOT work. It will be your task to
 make it work.
 
 On the Mininet CLI:
@@ -70,7 +71,7 @@ INFO  [L2BridgingComponent] Adding L2 unicast rule on device:leaf1 for host 00:0
 That's because `h2` sends NDP NS messages to resolve the MAC address of its
 gateway (`2001:1:2::ff` as configured in [topo.py](mininet/topo.py)).
 
-Indeed, we can check the IPv6 neighbor table for `h2` to see that the resolution
+We can check the IPv6 neighbor table for `h2` to see that the resolution
 has failed:
 
 ```
@@ -95,7 +96,7 @@ responsible of populating the `ndp_reply_table` with all interface IPv6
 addresses defined in the [netcfg.json](netcfg.json) and using `myStationMac` as
 the target MAC address.
 
-The component is currently disabled, you will need to enable it in the next
+The component is currently disabled; you will need to enable it in the next
 steps. But first, let's focus on the P4 program.
 
 ## Exercise steps
@@ -115,7 +116,7 @@ The action is not defined in this exercise as it was for Exercise 2. This action
 should:
 
 1. Replace the source Ethernet address with the destination one, expected to be 
-   `myStationMac`(see next section on "My Station" table);
+   `myStationMac` (see next section on "My Station" table);
 2. Set the destination Ethernet to the next hop's address (passed as an action
    argument);
 3. Decrement the IPv6 `hop_limit`.
