@@ -1,4 +1,4 @@
-ONOS_VERSION = 2.1.0-rc7
+ONOS_VERSION = 2.1.0
 ONOS_MD5 = 6ca21242cf837a726cfbcc637107026b
 ONOS_URL = http://repo1.maven.org/maven2/org/onosproject/onos-releases/$(ONOS_VERSION)/onos-$(ONOS_VERSION).tar.gz
 ONOS_TAR_PATH = ~/onos.tar.gz
