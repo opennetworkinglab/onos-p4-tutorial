@@ -62,6 +62,14 @@ following command inside the VM:
 
     ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' -q
 
+### Upgrade ONOS to the latest version used in the tutorial
+
+The VM may have shipped with an older version of ONOS than we would like to
+use for the exercises. You can upgrade to the latest version used for the
+tutorial using the following command:
+
+    make onos-upgrade
+
 ## Using an IDE to work on the exercises
 
 During the exercises you will need to write code in multiple languages such as
