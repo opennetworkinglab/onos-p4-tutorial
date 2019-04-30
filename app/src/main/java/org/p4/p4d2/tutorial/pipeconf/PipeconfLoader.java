@@ -63,30 +63,16 @@ public final class PipeconfLoader {
     @Activate
     public void activate() {
         // Registers the pipeconf at component activation.
-        final PiPipeconf newPipeconf;
-        try {
-            newPipeconf = buildPipeconf();
-        } catch (P4InfoParserException e) {
-            throw new RuntimeException("Unable to build pipeconf", e);
-        }
-
-        // Skip registration if pipeconf files did not change.
         if (pipeconfService.getPipeconf(PIPECONF_ID).isPresent()) {
-            if (pipeconfService.getPipeconf(PIPECONF_ID).get().fingerprint()
-                    != newPipeconf.fingerprint()) {
-                // Pipeconf files updated. Remove existing pipeconf before
-                // registering again.
-                log.info("Detected updated pipeconf fingerprint, reloading...");
-                pipeconfService.unregister(PIPECONF_ID);
-                removePipeconfDrivers();
-                pipeconfService.register(newPipeconf);
-            } else {
-                log.info("Skipping pipeconf registration as the registered " +
-                                 "pipeconf has the same fingerprint as the new one");
-            }
-        } else {
-            // First time registering.
-            pipeconfService.register(newPipeconf);
+            // Remove first if already registered, to support reloading of the
+            // pipeconf during the tutorial.
+            pipeconfService.unregister(PIPECONF_ID);
+        }
+        removePipeconfDrivers();
+        try {
+            pipeconfService.register(buildPipeconf());
+        } catch (P4InfoParserException e) {
+            log.error("Unable to register " + PIPECONF_ID, e);
         }
     }
 

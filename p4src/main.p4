@@ -27,8 +27,6 @@
 control FabricIngress (inout parsed_headers_t hdr,
                        inout fabric_metadata_t fabric_metadata,
                        inout standard_metadata_t standard_metadata) {
-    // TODO add name annotations to avoid using the fully qualified names
-    //  for tables etc.
 
     action drop() {
         mark_to_drop();
@@ -38,7 +36,7 @@ control FabricIngress (inout parsed_headers_t hdr,
      * NDP reply table and actions.
      * Handles NDP router solicitation message and send router advertisement to the sender.
      */
-    action ndp_advertisement(mac_addr_t router_mac) {
+    action ndp_ns_to_na(mac_addr_t router_mac) {
         hdr.ethernet.src_addr = router_mac;
         hdr.ethernet.dst_addr = IPV6_MCAST_01;
         bit<128> host_ipv6_tmp = hdr.ipv6.src_addr;
@@ -49,19 +47,19 @@ control FabricIngress (inout parsed_headers_t hdr,
         hdr.ndp_option.setValid();
         hdr.ndp_option.type = NDP_OPT_TARGET_LL_ADDR;
         hdr.ndp_option.length = 1;
-        hdr.ndp_option.value = router_mac;
+        hdr.ndp_option.value = target_mac;
         hdr.ipv6.next_hdr = PROTO_ICMPV6;
         standard_metadata.egress_spec = standard_metadata.ingress_port;
         fabric_metadata.skip_l2 = true;
     }
 
     direct_counter(CounterType.packets_and_bytes) ndp_reply_table_counter;
-    table ndp_reply {
+    table ndp_reply_table {
         key = {
             hdr.ndp.target_addr: exact;
         }
         actions = {
-            ndp_advertisement;
+            ndp_ns_to_na;
         }
         counters = ndp_reply_table_counter;
     }
@@ -287,7 +285,7 @@ control FabricIngress (inout parsed_headers_t hdr,
             exit;
         }
         if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
-            ndp_reply.apply();
+            ndp_reply_table.apply();
         }
         if (l2_my_station.apply().hit) {
             if (hdr.ipv6.isValid()) {

@@ -1,123 +1,216 @@
 ## Exercise 3: IPv6 routing
 
-In this exercise, you will be adding some tables that will perform IPv6
-routing of packets based on the topology and network configuration.
+In this exercise, you will be modifying the P4 program and ONOS app to add
+support for IPv6-based (L3) routing between all hosts connected to the fabric,
+with support for ECMP to forward traffic across the spines.
 
-## The network configuration
+## Overview
 
-The [netcfg.json](netcfg.json) includes device, host, and interface configuration.
+### Requirements
 
-In `devices` section of the config, you can find `srv6DeviceConfig` part which includes three attributes
-fot our tutorial application:
+At this stage, we want our fabric to behave like a standard IP fabric, with
+switches behaving as routers. As such, the following requirements should be
+satisfied by
+our fabric:
 
- - myStationMac: This is the mac address of the device, a.k.a. router mac address, we will use this attribute in this App.
- - mySid: The IPv6 address of the device, for segment routing application.
- - isSpine: determine that the switch is a leaf or spine in this topology.
+* Leaf interfaces should be assigned with an IPv6 address (the gateway address) 
+  and a a MAC address that we will call `myStationMac`;
+* Leaf switches should be able to handle NDP Neighbor Solicitation (NS)
+  messages sent by hosts to resolve the MAC address associated with the
+  switch interface/gateway IPv6 addresses, by replying with NDP Neighbor
+  Advertisement (NA) informing hosts of their `myStationMac` address;
+* Packets received with Ethernet destination `myStationMac` should be processed
+  through the routing pipeline, otherwise the bridging one;
+* When routing, the P4 program should look at the IPv6 destination address, if a
+  matching entry is found, the packet should be forwarded to a given next hop
+  and the packet Ethernet addresses modified accordingly (source set to 
+  `myStationMac` and destination to the next hop one);
+* When routing packets to a different leaf across the spines, leaf switches
+  should be able to use ECMP do distribute traffic.
+
+### Configuration
+
+The [netcfg.json](netcfg.json) file includes a special configuration for each
+device named `srv6DeviceConfig`, this block defines 3 values:
+
+ * `myStationMac`: MAC address associated with the device, i.e., the router MAC
+   address;
+ * `mySid`: the SRv6 segment ID of the device, used in the next exercise.
+ * `isSpine`: a boolean flag whether the device should be considered as a spine
+   switch.
+
+Moreover, the [netcfg.json](netcfg.json) file also includes a list of interfaces
+with an IPv6 prefix assigned to them (look under the `ports` section of the
+file). The same IPv6 addresses are used in the Mininet topology script
+[topo.py](mininet/topo.py).
+
+### Try pinging hosts in different subnets
+
+Similarly to the previous exercise, let's start by using Mininet to verify that
+pinging hosts on different subnets it does NOT work. It will be your task to
+make it work.
+
+On the Mininet CLI:
+
+```
+mininet> h2 ping h3
+PING 2001:2:3::1(2001:2:3::1) 56 data bytes
+From 2001:1:2::a icmp_seq=1 Destination unreachable: Address unreachable
+From 2001:1:2::a icmp_seq=2 Destination unreachable: Address unreachable
+From 2001:1:2::a icmp_seq=3 Destination unreachable: Address unreachable
+...
+```
+
+If you check the ONOS log, you will notice that `h2` has been discovered:
+
+```
+INFO  [L2BridgingComponent] HOST_ADDED event! host=00:00:00:00:00:20/None, deviceId=device:leaf1, port=6
+INFO  [L2BridgingComponent] Adding L2 unicast rule on device:leaf1 for host 00:00:00:00:00:20/None (port 6)...
+```
+
+That's because `h2` sends NDP NS messages to resolve the MAC address of its
+gateway (`2001:1:2::ff` as configured in [topo.py](mininet/topo.py)).
+
+Indeed, we can check the IPv6 neighbor table for `h2` to see that the resolution
+has failed:
+
+```
+mininet> h2 ip -6 n
+2001:1:2::ff dev h2-eth0  FAILED
+```
+
+### P4-based generation of NDP messages
+
+The starter P4 code already provides a table `ndp_reply_table` and action
+`ndp_ns_to_na(mac_addr_t target_mac)` to reply to NDP NS messages sent by
+hosts to resolve the MAC address of the switch interface/gateway IPV6 addresses.
+
+The table essentially provides a mapping between an IPv6 addresses and its
+corresponding MAC address() defined as the action parameter). The action
+implementation transforms the same NDP NS packet into an NA one with the given
+target MAC address.
+
+The ONOS app already provides a component
+[NdpReplyComponent.java](app/src/main/java/org/p4/p4d2/tutorial/NdpReplyComponent.java)
+responsible of populating the `ndp_reply_table` with all interface IPv6
+addresses defined in the [netcfg.json](netcfg.json) and using `myStationMac` as
+the target MAC address.
+
+The component is currently disabled, you will need to enable it in the next
+steps. But first, let's focus on the P4 program.
 
 ## Exercise steps
 
-### 1.Adding tables for IPv6 routing
+### 1. Modify P4 program
 
-The first step will be to add the new tables to `main.p4`.
+The first step will be to add new tables to `main.p4`.
+
+#### LPM IPv6 routing table
 
 The main table for this exercise will be an L3 table that matches on destination
 IPv6 address. You should create a table that performs the longest prefix match
 on the destination address and performs the required packet transformations.
 
 The action is not defined in this exercise as it was for Exercise 2. This action
-should update the source Ethernet address to the router's address, set the destination
-Ethernet to the next hop's address, and decrement the hop_limit.
+should:
 
-After you create the table, you will need to apply the table in your `apply` block,
-as you did in Exercise 2. At this point, your pipeline should properly match and
-transform IPv6 packets.
+1. Update the source Ethernet address to `myStationMac` (passed as an action 
+   argument);
+2. Set the destination Ethernet to the next hop's address (passed as an action
+   argument);
+3. Decrement the IPv6 `hop_limit`.
+
+This L3 table and action should provide a mapping between a given IPv6 prefix
+and a next hop MAC address. In our solution (and hence in the PTF starter code
+and ONOS app), we re-use the L2 table defined in the previous exercise to
+provide a mapping between the next hop MAC address and an output port. If you
+want to apply the same solution, make sure to call the L3 table before the L2
+one in the `apply` block.
+
+Moreover, we will want to drop the packet when the IPv6 hop limit reaches 0.
+This can be accomplished by inserting logic in the `apply` that inspects the
+field after applying your L3 table.
+
+At this point, your pipeline should properly match, transform, and forward IPv6
+packets.
 
 **Note:** For simplicity, we are using a global routing table. If you would like
-to segment your routing table in virtual tables (i.e. using a VRF ID), you can
+to segment your routing table in virtual ones (i.e. using a VRF ID), you can
 tackle this as extra credit.
 
-We will want to drop the packet when the IPv6 hop limit reaches 0. This can be
-accomplished by inserting logic in the `apply` that inspects the field after applying
-your L3 table.
+#### "My Station" table
 
 You may realize that at this point that the switch will perform IPv6 routing
-nondiscriminately, which is technically incorrect. The switch should only route
-Ethernet frames that are destined for the router's Ethernet address(the `myStationMac` from network config).
+indiscriminately, which is technically incorrect. The switch should only route
+Ethernet frames that are destined for the router's Ethernet address
+(`myStationMac`).
 
-To address this issue, you will need to create a table that will match the destination
-Ethernet address and mark the packet for routing if there is a match.
+To address this issue, you will need to create a table that will match the
+destination Ethernet address and mark the packet for routing if there is a
+match. We call this the "My Station" table.
 
 You are free to use a specific action or metadata to carry this information, or
 for simplicity, you can use `NoAction` and check for a hit in this table in your
 `apply` block. Remember to update your `apply` block after creating this table.
 
-The last modification that you will make to the pipeline is to add an `action_selector`
-that will hash traffic between the different possible paths. In our leaf-spine topology,
-we have an equal cost path for each spine for every leaf pair, and we want to be able
-to take advantage of that.
+#### Adding support for ECMP with action selectors
 
-We have already defined the `ecmp_selector` for you, but you will need to add the
-selector to your L3 table. You will also need to add the selector fields as match keys.
+The last modification that you will make to the pipeline is to add an
+`action_selector` that will hash traffic between the different possible paths.
+In our leaf-spine topology, we have an equal-cost path for each spine for every
+leaf pair, and we want to be able to take advantage of that.
 
-For IPv6 traffic, you will need to include the source and destination IPv6 addresses as
-well as the IPv6 flow label as part of the ECMP hash, but you are free to include other
-parts of the packet header if you would like. For example, you could include the rest of
-the 5-tuple (i.e. L4 proto and ports); the L4 port are parsed into fabric_metadata if
-would like to use them. For more details on the required fields for hashing IPv6 traffic,
-see RFC6438.
+We have already defined the P4 `ecmp_selector` for you, but you will need to add
+the selector to your L3 table. You will also need to add the selector fields as
+match keys.
+
+For IPv6 traffic, you will need to include the source and destination IPv6
+addresses as well as the IPv6 flow label as part of the ECMP hash, but you are
+free to include other parts of the packet header if you would like. For example,
+you could include the rest of the 5-tuple (i.e. L4 proto and ports); the L4
+ports are parsed into `fabric_metadata` if would like to use them. For more
+details on the required fields for hashing IPv6 traffic, see RFC6438.
 
 You can compile the program using `make p4` from the `tutorial` directory.
 Make sure to address any compiler errors before continuing.
 
 At this point, our P4 pipeline should be ready for testing.
 
-### 2.Testing the pipeline with Packet Test Framework (PTF)
+### 2. Run PTF tests
 
-In this step, you will be add test codes to [routing.py](ptf/tests/routing.py) to verify the routing
-the behavior of the pipeline.
+Tests for the IPv6 routing behavior are located in `ptf/tests/routing.py`. Open
+that file up and modify wherever requested (look for `TODO EXERCISE 3`).
 
-In the `IPv6RoutingTest` we test three different types of a packet: TCPv6, UDPv6, and ICMPv6
+To run all tests for this exercise:
 
-Those packets includes sample Ethernet, IPv6 headers and payload.
-The test program will send packets to first port (port 1) of test switch,
-and we expect the switch routes the packet to the next hop, which performs actions below:
+    cd ptf
+    make routing
 
- 1. Check if destination mac address is the device mac(`myStationMac` from network config).
- 2. Modify the mac address.
-    - modify the source mac address to device mac.
-    - modify the destination mac address to next hop mac address (can be another device mac or a host).
- 3. Decrement the TTL/hop-limit of the IP header.
- 4. Send the packet out to a port according to destination mac address.
+This command will run all tests in the `routing` group (i.e. the content of
+`ptf/tests/routing.py`). To run a specific test case you can use:
 
-You should be able to find `TODO EXERCISE 3` in [routing.py](ptf/tests/routing.py).
+    make <PYTHON MODULE>.<TEST CASE NAME>
 
-The first one is to program the table which checks the destination mac address.
+For example:
 
-The second one is to add an action profile group for setting the next hop mac address.
+    make bridging.IPv6RoutingTest
 
-The third one is to add a table entry which matches the IP prefix and point to the action profile group we just created.
+#### Check for regressions
 
-The last one is the table which handles the packet with next hop destination mac.
-We expected to receive the packet from second port (port 2) of the switch.
-This can be done by using the bridging table, see [EXERCISE-2.md](EXERCISE-2.md)
+To make sures the new changes are not breaking other features, make sure to run
+tests of the previous exercises as well.
 
-After finish all `TODO` we should be able to run the test and see the following messages:
+    make packetio
+    make bridging
+    make routing
 
-```
-routing.IPv6RoutingTest ... tcpv6 ... udpv6 ... icmpv6 ... ok
+If all tests succeed, congratulations! You can move to the next step.
 
-----------------------------------------------------------------------
-Ran 1 test in 0.042s
+### 3. Modify ONOS app
 
-OK
-```
-
-Now we have shown that we can install basic rules and pass traffic using BMv2.
-
-### 3.Developing the ONOS routing app
-
-The last part of the exercise is to update the starter code for the routing exercise,
-located here: `tutorial/app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`.
+The last part of the exercise is to update the starter code for routing
+component of our ONOS app, located here:
+`app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`
 
 This session will focus on adding support for routing of IPv6 packets.
 

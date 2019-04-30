@@ -47,6 +47,7 @@ class IPv6RoutingTest(P4RuntimeTest):
     """Tests basic IPv6 routing"""
 
     def runTest(self):
+        # Test with different type of packets.
         for pkt_type in ["tcpv6", "udpv6", "icmpv6"]:
             print_inline("%s ... " % pkt_type)
             pkt = getattr(testutils, "simple_%s_packet" % pkt_type)()
@@ -56,10 +57,11 @@ class IPv6RoutingTest(P4RuntimeTest):
     def testPacket(self, pkt):
         next_hop_mac = SWITCH2_MAC
 
-        # Add table entry which handles packet with destination mac equals to router mac (my station mac)
-        # Consider pkt's mac dst addr as my station address
+        # Add entry to "My Station" table. Consider the given pkt's eth dst addr
+        # as myStationMac address.
         # TODO EXERCISE 3
-        # Modify the table_name, match_field name and action_name to match your P4Info file.
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_my_station",
@@ -73,7 +75,8 @@ class IPv6RoutingTest(P4RuntimeTest):
 
         # Insert ECMP group with only one member (next_hop_mac)
         # TODO EXERCISE 3
-        # Modify action profile name and action name to match your P4Info file.
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_act_prof_group(
             act_prof_name="FabricIngress.ecmp_selector",
@@ -85,9 +88,10 @@ class IPv6RoutingTest(P4RuntimeTest):
         ))
         # ---- END SOLUTION ----
 
-        # Map pkt's IPv6 dst addr to group
+        # Insert L3 entry to app pkt's IPv6 dst addr to group
         # TODO EXERCISE 3
-        # Modify table name and match field name to match your P4Info file.
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l3_table",
@@ -99,9 +103,10 @@ class IPv6RoutingTest(P4RuntimeTest):
         ))
         # ---- END SOLUTION ----
 
-        # Map next_hop_mac to output port
+        # Insert L3 entry to map next_hop_mac to output port 2.
         # TODO EXERCISE 3
-        # Modify table name, match field name and action to match your P4Info file.
+        # Modify names to match content of P4Info file (look for the fully
+        # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
             table_name="FabricIngress.l2_exact_table",
@@ -116,7 +121,8 @@ class IPv6RoutingTest(P4RuntimeTest):
         ))
         # ---- END SOLUTION ----
 
-        # Expected pkt should have routed MAC addresses and decremented TTL
+        # Expected pkt should have routed MAC addresses and decremented hop
+        # limit (TTL).
         exp_pkt = pkt.copy()
         pkt_route(exp_pkt, next_hop_mac)
         pkt_decrement_ttl(exp_pkt)
@@ -127,25 +133,26 @@ class IPv6RoutingTest(P4RuntimeTest):
 
 @group("routing")
 class NdpReplyGenTest(P4RuntimeTest):
-    """Tests automatic generation of NDP Neighbor Advertisement for IPV6 address
-    associated to the switch interface."""
+    """Tests automatic generation of NDP Neighbor Advertisement for IPV6
+    addresses associated to the switch interface.
+    """
 
     @autocleanup
     def runTest(self):
         switch_ip = SWITCH1_IPV6
-        switch_mac = SWITCH1_MAC
+        target_mac = SWITCH1_MAC
 
         # Insert entry to transform NDP NA packets for the given target address
-        # (match), to NDP NA packes with the give target MAC address (action)
+        # (match), to NDP NA packets with the given target MAC address (action)
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.ndp_reply",
+            table_name="FabricIngress.ndp_reply_table",
             match_fields={
                 # Exact match.
                 "hdr.ndp.target_addr": switch_ip
             },
-            action_name="FabricIngress.ndp_advertisement",
+            action_name="FabricIngress.ndp_ns_to_na",
             action_params={
-                "router_mac": switch_mac
+                "target_mac": target_mac
             }
         ))
 
@@ -154,8 +161,8 @@ class NdpReplyGenTest(P4RuntimeTest):
 
         # NDP Neighbor Advertisement packet
         exp_pkt = genNdpNaPkt(target_ip=switch_ip,
-                              target_mac=switch_mac,
-                              src_mac=switch_mac,
+                              target_mac=target_mac,
+                              src_mac=target_mac,
                               src_ip=switch_ip,
                               dst_ip=pkt[IPv6].src)
 

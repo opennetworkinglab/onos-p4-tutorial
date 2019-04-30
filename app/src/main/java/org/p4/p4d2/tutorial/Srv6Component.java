@@ -48,8 +48,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import static com.google.common.collect.Streams.stream;
 import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
@@ -196,7 +194,7 @@ public class Srv6Component {
         List<PiActionParam> actionParams = Lists.newArrayList();
 
         for (int i = 0; i < segmentList.size(); i++) {
-            PiActionParamId paramId = PiActionParamId.of("s" + (i+1));
+            PiActionParamId paramId = PiActionParamId.of("s" + (i + 1));
             PiActionParam param = new PiActionParam(paramId, segmentList.get(i).toOctets());
             actionParams.add(param);
         }

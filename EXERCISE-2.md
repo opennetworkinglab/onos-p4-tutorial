@@ -118,7 +118,7 @@ For example:
 
     make bridging.ArpNdpRequestWithCloneTest
 
-**Check for regressions**
+#### Check for regressions
 
 To make sure the new changes are not breaking other features, make sure to run
 tests of the previous exercises as well.
@@ -199,7 +199,6 @@ reloading the app, you should see messages signaling that a new pipeline
 configuration has been set and the `L2BridgingComponent` has been activated:
 
 ```
-INFO  [PipeconfLoader] Detected updated pipeconf fingerprint, reloading...
 INFO  [PiPipeconfManager] Unregistered pipeconf: org.p4.srv6-tutorial (fingerprint=2e:39:f0:81:cd:a3:76:20)
 INFO  [PipeconfLoader] Found 1 outdated drivers for pipeconf 'org.p4.srv6-tutorial', removing...
 INFO  [PiPipeconfManager] New pipeconf registered: org.p4.srv6-tutorial (fingerprint=2e:39:f0:81:1f:37:e6:82)
@@ -309,6 +308,14 @@ network:
 
 5. If here and still not working, **reach out to one of the instructors for
    assistance.**
+
+### 5. Visualize hosts on the ONOS web UI
+
+Open a browser from within the tutorial VM (e.g. Firefox) to
+<http://127.0.0.1:8181/onos/ui>. When asked, use the username `onos` and
+password `rocks`.
+
+To toggle showing hosts on the topology view, press `H` on your keyboard.
 
 ## Congratulations
 

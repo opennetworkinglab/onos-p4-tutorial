@@ -458,6 +458,18 @@ clone packets to the controller (or to the CPU, using data plane terminology).
 `CLONE` groups are the ONOS northbound abstraction equivalent to P4Runtime's
 packet replication engine (PRE) `CloneSessionEntry`.
 
+### 6. Visualize the topology on the ONOS web UI
+
+Open a browser from within the tutorial VM (e.g. Firefox) to
+<http://127.0.0.1:8181/onos/ui>. When asked, use the username `onos` and password
+`rocks`.
+
+While here, feel free to interact with and discover the ONOS UI. For more
+information on how to use the ONOS web UI please refer to this guide:
+
+<https://wiki.onosproject.org/x/OYMg>
+
+To show or hide switch labels, press `L` on your keyboard.
 
 ### Congratulations!
 
@@ -534,5 +546,3 @@ Because the capabilities of the Thrift server overlap with those of the
 gRPC/P4Runtime one provided by Stratum (e.g. a table management API is exposed
 by both), there could be inconsistency issues when using both to write state to
 the switch. As such, **we recommend using this CLI only to read state**.
-
-
