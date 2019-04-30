@@ -285,9 +285,7 @@ control IngressPipeImpl (inout parsed_headers_t hdr,
             exit;
         }
         if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
-            if(ndp_reply_table.apply().hit) {
-                exit;
-            }
+            ndp_reply_table.apply();
         }
         if (l2_my_station.apply().hit) {
             if (hdr.ipv6.isValid()) {
