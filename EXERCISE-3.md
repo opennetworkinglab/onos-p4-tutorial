@@ -2,23 +2,22 @@
 
 In this exercise, you will be modifying the P4 program and ONOS app to add
 support for IPv6-based (L3) routing between all hosts connected to the fabric,
-with support for ECMP to forward traffic across the spines.
+with support for ECMP to balance traffic flows across multiple spines.
 
 ## Overview
 
 ### Requirements
 
 At this stage, we want our fabric to behave like a standard IP fabric, with
-switches behaving as routers. As such, the following requirements should be
-satisfied by
-our fabric:
+switches functioning as routers. As such, the following requirements should be
+satisfied:
 
 * Leaf interfaces should be assigned with an IPv6 address (the gateway address) 
-  and a a MAC address that we will call `myStationMac`;
+  and a MAC address that we will call `myStationMac`;
 * Leaf switches should be able to handle NDP Neighbor Solicitation (NS)
-  messages sent by hosts to resolve the MAC address associated with the
+  messages -- sent by hosts to resolve the MAC address associated with the
   switch interface/gateway IPv6 addresses, by replying with NDP Neighbor
-  Advertisement (NA) informing hosts of their `myStationMac` address;
+  Advertisements (NA) notifying their `myStationMac` address;
 * Packets received with Ethernet destination `myStationMac` should be processed
   through the routing pipeline, otherwise the bridging one;
 * When routing, the P4 program should look at the IPv6 destination address, if a
@@ -33,11 +32,11 @@ our fabric:
 The [netcfg.json](netcfg.json) file includes a special configuration for each
 device named `srv6DeviceConfig`, this block defines 3 values:
 
- * `myStationMac`: MAC address associated with the device, i.e., the router MAC
+ * `myStationMac`: MAC address associated with each device, i.e., the router MAC
    address;
  * `mySid`: the SRv6 segment ID of the device, used in the next exercise.
- * `isSpine`: a boolean flag whether the device should be considered as a spine
-   switch.
+ * `isSpine`: a boolean flag, indicating whether the device should be considered
+   as a spine switch.
 
 Moreover, the [netcfg.json](netcfg.json) file also includes a list of interfaces
 with an IPv6 prefix assigned to them (look under the `ports` section of the
@@ -47,7 +46,7 @@ file). The same IPv6 addresses are used in the Mininet topology script
 ### Try pinging hosts in different subnets
 
 Similarly to the previous exercise, let's start by using Mininet to verify that
-pinging hosts on different subnets it does NOT work. It will be your task to
+pinging hosts on different subnets does NOT work. It will be your task to
 make it work.
 
 On the Mininet CLI:
@@ -83,10 +82,10 @@ mininet> h2 ip -6 n
 
 The starter P4 code already provides a table `ndp_reply_table` and action
 `ndp_ns_to_na(mac_addr_t target_mac)` to reply to NDP NS messages sent by
-hosts to resolve the MAC address of the switch interface/gateway IPV6 addresses.
+hosts.
 
-The table essentially provides a mapping between an IPv6 addresses and its
-corresponding MAC address() defined as the action parameter). The action
+The table essentially provides a mapping between an IPv6 address and its
+corresponding MAC address (defined as the action parameter). The action
 implementation transforms the same NDP NS packet into an NA one with the given
 target MAC address.
 
@@ -107,40 +106,41 @@ The first step will be to add new tables to `main.p4`.
 
 #### LPM IPv6 routing table
 
-The main table for this exercise will be an L3 table that matches on destination
-IPv6 address. You should create a table that performs the longest prefix match
-on the destination address and performs the required packet transformations.
+The main table for this exercise will be an L3 table that matches on the
+destination IPv6 address. You should create a table that performs longest
+prefix match (LPM) on the destination address and performs the required packet
+transformations.
 
 The action is not defined in this exercise as it was for Exercise 2. This action
 should:
 
-1. Update the source Ethernet address to `myStationMac` (passed as an action 
-   argument);
+1. Replace the source Ethernet address with the destination one, expected to be 
+   `myStationMac`(see next section on "My Station" table);
 2. Set the destination Ethernet to the next hop's address (passed as an action
    argument);
 3. Decrement the IPv6 `hop_limit`.
 
 This L3 table and action should provide a mapping between a given IPv6 prefix
 and a next hop MAC address. In our solution (and hence in the PTF starter code
-and ONOS app), we re-use the L2 table defined in the previous exercise to
-provide a mapping between the next hop MAC address and an output port. If you
-want to apply the same solution, make sure to call the L3 table before the L2
-one in the `apply` block.
+and ONOS app), we re-use the L2 table defined in Exercise 2 to provide a mapping
+between the next hop MAC address and an output port. If you want to apply the
+same solution, make sure to call the L3 table before the L2 one in the `apply`
+block.
 
 Moreover, we will want to drop the packet when the IPv6 hop limit reaches 0.
-This can be accomplished by inserting logic in the `apply` that inspects the
-field after applying your L3 table.
+This can be accomplished by inserting logic in the `apply` block that inspects
+the field after applying your L3 table.
 
 At this point, your pipeline should properly match, transform, and forward IPv6
 packets.
 
 **Note:** For simplicity, we are using a global routing table. If you would like
 to segment your routing table in virtual ones (i.e. using a VRF ID), you can
-tackle this as extra credit.
+tackle this as an extra credit.
 
 #### "My Station" table
 
-You may realize that at this point that the switch will perform IPv6 routing
+You may realize that at this point the switch will perform IPv6 routing
 indiscriminately, which is technically incorrect. The switch should only route
 Ethernet frames that are destined for the router's Ethernet address
 (`myStationMac`).
@@ -156,9 +156,9 @@ for simplicity, you can use `NoAction` and check for a hit in this table in your
 #### Adding support for ECMP with action selectors
 
 The last modification that you will make to the pipeline is to add an
-`action_selector` that will hash traffic between the different possible paths.
-In our leaf-spine topology, we have an equal-cost path for each spine for every
-leaf pair, and we want to be able to take advantage of that.
+`action_selector` that will hash traffic between the different possible next
+hops. In our leaf-spine topology, we have an equal-cost path for each spine for
+every leaf pair, and we want to be able to take advantage of that.
 
 We have already defined the P4 `ecmp_selector` for you, but you will need to add
 the selector to your L3 table. You will also need to add the selector fields as
@@ -208,122 +208,158 @@ If all tests succeed, congratulations! You can move to the next step.
 
 ### 3. Modify ONOS app
 
-The last part of the exercise is to update the starter code for routing
+The last part of the exercise is to update the starter code for the routing
 component of our ONOS app, located here:
 `app/src/main/java/org/p4/p4d2/tutorial/Ipv6RoutingComponent.java`
 
-This session will focus on adding support for routing of IPv6 packets.
+Similarly to the previous exercise, the starter code already provides an
+implementation for event listeners and the routing policy, i.e., methods
+triggered as a consequence of topology events, for example to compute ECMP
+groups based on the available links between leaves and a spines.
 
-First is to modify the `setUpMyStationTable` method to insert a rule that
-matches the router's Ethernet address(`myStationMac` from network config) and insert it into your my station table.
+You are asked to modify the implementation of 4 methods.
 
-This method will be called when a device is added and the device is available, and get device mac address
-from network configuration. (See `InternalDeviceListener` class)
+* `setUpMyStationTable()`: to insert flow rules for the "My Station" table;
 
-After completed the method and reload the application (`make app-build app-reload`),
-you should be able to get related flows from ONOS command line:
+* `createNextHopGroup()`: responsible of creating the ONOS equivalent of a
+  P4Runtime action profile group for the ECMP selector of the routing table;
+  
+* `createRoutingRule()`: to create a flow rule for the IPv6 routing table;
 
-```
-sdn@root > flows -s
-... skip ...
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
-    ADDED, bytes=0, packets=0, table=<Table Name>, priority=10, selector=[<Match field name (dst mac)>=<Router Mac>], treatment=[immediate=[<Action Name>]]
-... skip ...
-```
+* `createL2NextHopRule()`: to create flow rules mapping next hop MAC addresses
+  (used in the ECMP groups) to output ports. You should have already implemented
+  a similar method in the `L2BridgingComponent` (see `learnHost()` method). This
+  one is called to create L2 rules between switches, e.g. to forward packets
+  between leaves and spines. There's no need to handle L2 rules for hosts since
+  those are inserted by the `L2BridgingComponent`.
 
-----
+#### Enable the routing components
 
-Second, complete three method below to provide routing with ECMP.
+Once you're confident your solution to the previous step should work, before
+building and reloading the app, remember to enable the routing-related
+components by setting the `enabled` flag to `true` at the top of the class
+definition.
 
-These three methods will be called when a link or a host which connected to this device is up. 
+For IPv6 routing to work, you should enable the following components:
 
-#### The createNextHopGroup method
+* `Ipv6RoutingComponent.java`
+* `NdpReplyComponent.java`
 
-The `createNextHopGroup` creates an group with given group ID and collection of next hop mac address.
+#### Build and reload the app
 
-An packet can be route to one or more next hop(s), when a routing entry uses this group, 
-the device will choose a group member(action) which based on implementation of `action selector` in previous section.
-
-Once a group member has selected, the device will perform the action, which sets the next hop mac address in this case.
-
-You goal is to create members(actions) for this group to set the next hop address to the packet.
-
-The flows will be looks like:
+Use the following command to build and reload your app while ONOS is running:
 
 ```
-onos> groups
-... skip ...
-deviceId=device:bmv2:leaf1, groupCount=7
-   # This is a group which set next hop to spines
-   id=0xec3b0000, state=ADDED, type=SELECT, bytes=0, packets=0, appId=org.p4.srv6-tutorial, referenceCount=0
-       id=0xec3b0000, bucket=1, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0xbb00000002)]
-       id=0xec3b0000, bucket=2, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0xbb00000001)]
-   # This is a group which set next hop to the host (host h1a)
-   id=0x1a, state=ADDED, type=SELECT, bytes=0, packets=0, appId=org.p4.srv6-tutorial, referenceCount=0
-       id=0x1a, bucket=1, bytes=0, packets=0, weight=1, actions=[FabricIngress.set_l2_next_hop(dmac=0x1a)]
-... skip ...
+$ make app-build app-reload
 ```
 
-#### The createRoutingRule method
+When building the app, the modified P4 compiler outputs (`bmv2.json` and
+`p4info.txt`) will be packaged together along with the Java classes. After
+reloading the app, you should see messages in the ONOS log signaling that a new
+pipeline configuration has been set and the `Ipv6RoutingComponent` and
+`NdpReplyComponent` have been activated.
 
-The `createRoutingRule` creates the routing rule with given IPv6 prefix and group ID we used from previous method.
+Check also the log for potentially harmful messages. See
+[Exercise 2](EXERCISE-2.md) to get an understanding of common errors.
+
+### 4. Test IPv6 routing on Mininet
+
+#### Verify ping
+
+Type the following commands in the Mininet CLI, in order:
 
 ```
-onos> flows -s
-deviceId=device:bmv2:leaf1, flowRuleCount=25
-... skip ...
-# These are flows which sends packet through spines
-    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x20010001000300000000000000000000/64], treatment=[immediate=[GROUP:0xec3b0000]]
-    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x20010001000400000000000000000000/64], treatment=[immediate=[GROUP:0xec3b0000]]
-# A flow which route a packet to host
-    ADDED, bytes=0, packets=0, table=<L3 Table name>, priority=10, selector=[<IP prefix field>=0x2001000100010000000000000000000a/128], treatment=[immediate=[GROUP:0x1a]]
-... skip ...
+mininet> h2 ping h3
+mininet> h3 ping h2
+PING 2001:1:2::a(2001:1:2::a) 56 data bytes
+64 bytes from 2001:1:2::a: icmp_seq=2 ttl=61 time=2.39 ms
+64 bytes from 2001:1:2::a: icmp_seq=3 ttl=61 time=2.29 ms
+64 bytes from 2001:1:2::a: icmp_seq=4 ttl=61 time=2.71 ms
+...
 ```
 
-#### The createNextHopRule method
+Now ping between `h3` and `h2` should work. If ping does NOT work, check the
+same troubleshooting steps of [Exercise 2](EXERCISE-2.md).
 
-The `createNextHopRule` method which creates L2 rules for next hop. This method is used to set output port according to 
-the destination address. We already have similar method in `L2BridgingComponent` (see `learnHost` method).
-This method is called when two device(switch) connected, and create L2 rules between devices. We don't handle L2 rule 
-for hosts since we already installed necessary rules for host in `L2BridgingComponent`.
+The ONOS log should show messages such as:
 
-----
-
-After the app completed and reload to ONOS, you should be able to ping between different hosts from multiple subnet.
-
-*Note:* The ONOS must learn host IP address first to install necessary rules. To check which hosts are learnt by ONOS 
-simply use `hosts` command in ONOS CLI (or `hosts -s` for simple one).
-
-There should be six hosts:
 ```
-onos> hosts -s
-id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:bmv2:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
-id=00:00:00:00:00:1B/None, mac=00:00:00:00:00:1B, locations=[device:bmv2:leaf1/4], vlan=None, ip(s)=[2001:1:1::b]
-id=00:00:00:00:00:1C/None, mac=00:00:00:00:00:1C, locations=[device:bmv2:leaf1/5], vlan=None, ip(s)=[2001:1:1::c]
-id=00:00:00:00:00:20/None, mac=00:00:00:00:00:20, locations=[device:bmv2:leaf1/6], vlan=None, ip(s)=[2001:1:2::1]
-id=00:00:00:00:00:30/None, mac=00:00:00:00:00:30, locations=[device:bmv2:leaf2/3], vlan=None, ip(s)=[2001:1:3::1]
-id=00:00:00:00:00:40/None, mac=00:00:00:00:00:40, locations=[device:bmv2:leaf2/4], vlan=None, ip(s)=[2001:1:4::1]
+INFO  [Ipv6RoutingComponent] HOST_ADDED event! host=00:00:00:00:00:20/None, deviceId=device:leaf1, port=6
+INFO  [Ipv6RoutingComponent] Adding routes on device:leaf1 for host 00:00:00:00:00:20/None [[2001:1:2::a]]
+...
+INFO  [Ipv6RoutingComponent] HOST_ADDED event! host=00:00:00:00:00:30/None, deviceId=device:leaf2, port=3
+INFO  [Ipv6RoutingComponent] Adding routes on device:leaf2 for host 00:00:00:00:00:30/None [[2001:2:3::1]]
+...
 ```
 
-**If you cannot find any host** from ONOS CLI, try use the host to send some NDP packet so the controller can learn it.
-The easiest way to sent NDP packet is to ping another hosts with `ping` command, by default the host should send 
-a *Router Solicitation* or *Neighbor Solicitation* message and those message will be captured by the controller.
+If you don't see messages regarding the discovery of `h2` (`00:00:00:00:00:20`)
+it's because ONOS has already discovered that host when you tried to ping at
+the beginning of the exercise.
 
-Below is an example to send ping packet to `h1a` from `h2`.
+**Note:** we need to start the ping first from `h2` and then from `h3` to let 
+ONOS discover the location of both hosts before ping packets can be forwarded.
+That's because the current implementation requires hosts to generate NDP NS
+packets to be discovered by ONOS. To avoid having to manually generate NDP NS
+messages, a possible solution could be:
+
+* Configure IPv6 hosts in Mininet to periodically and automatically generate a
+  different type of NDP messages, named Router Solicitation (RS).
+  
+* Insert a flow rule in the ACL table to clone NDP RS packets to the CPU. This
+  would require matching on a different value of ICMPv6 code other than NDP NA
+  and NS.
+  
+* Modify the `hostprovider` built-in app implementation to learn host location
+  from NDP RS messages (it currently uses only NDP NA and NS).
+
+#### Verify P4-based NDP NA generation
+
+To verify that the P4-based generation of NDP NA replies by the switch is
+working, you can check the neighbor table of `h2` or `h3`, it should show
+something similar to this:
+
 ```
-mininet> h2 ping h1a
-PING 2001:1:1::a(2001:1:1::a) 56 data bytes
-64 bytes from 2001:1:1::a: icmp_seq=1 ttl=63 time=1.91 ms
-64 bytes from 2001:1:1::a: icmp_seq=2 ttl=63 time=0.825 ms
-64 bytes from 2001:1:1::a: icmp_seq=3 ttl=63 time=1.10 ms
-64 bytes from 2001:1:1::a: icmp_seq=4 ttl=63 time=0.803 ms
-64 bytes from 2001:1:1::a: icmp_seq=5 ttl=63 time=0.804 ms
-64 bytes from 2001:1:1::a: icmp_seq=6 ttl=63 time=1.01 ms
+mininet> h3 ip -6 n
+2001:2:3::ff dev h3-eth0 lladdr 00:aa:00:00:00:02 router REACHABLE
 ```
+
+Where `2001:2:3::ff` is the IPv6 gateway address defined in `netcfg.json` and
+`topo.py`, and `00:aa:00:00:00:02` is the `myStationMac` defined for `leaf2` in 
+`netcfg.json`.
+
+#### Visualize ECMP using the ONOS web UI
+
+To verify that ECMP is working, let's start multiple parallel traffic flows from
+`h2` to `h3` using iperf. In the Mininet command prompt, type:
+
+```
+mininet> h2 iperf -c h3 -u -V -P5 -b1M -t600 -i1
+```
+
+This commands will start an iperf client on `h2`, sending UDP packets (`-u`)
+over IPv6 (`-V`) to `h3` (`-c`). In doing this, we generate 5 distinct flows
+(`-P5`), each one capped at 1Mbit/s (`-b1M`), running for 10 minutes (`-t600`)
+and reporting stats every 1 second (`-i1`).
+
+Since we are generating UDP traffic, there's no need to start an iperf server
+on `h3`.
+
+To visualize traffic, open a browser from within the tutorial VM (e.g. Firefox)
+to <http://127.0.0.1:8181/onos/ui>. When asked, use the username `onos` and
+password `rocks`. On the same page where the ONOS topology view is shown:
+
+* Press `H` on your keyboard to show hosts;
+* Press `L` to show device labels;
+* Press `A` multiple times until you see port/link stats, in either 
+  packets/seconds (pps) or bits/seconds.
+
+If you completed the P4 and app implementation correctly, and ECMP is working,
+you should see traffic being forwarded to both spines as in the screenshot
+below:
+
+<img src="img/routing-ecmp.png" alt="ECMP Test" width="344"/>
 
 ### Congratulations!
 
-You have completed the third exercise. You can now move to the next one.
-
+You have completed Exercise 3! Now your fabric is capable of forwarding IPv6
+traffic across the fabric.
