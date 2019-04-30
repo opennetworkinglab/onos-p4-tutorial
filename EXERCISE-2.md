@@ -253,7 +253,7 @@ reloading the app:
     **Read carefully the error message and make changes to the app as needed.**
     Chances are that you are using a table, match field, or action name that
     does not exist in your P4Info. Check your P4Info file, modify, and reload the
-    app (`make app-build && make app-reload`).
+    app (`make app-build app-reload`).
 
 ### 4. Test L2 bridging on Mininet
 
