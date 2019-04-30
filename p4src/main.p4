@@ -36,8 +36,8 @@ control FabricIngress (inout parsed_headers_t hdr,
      * NDP reply table and actions.
      * Handles NDP router solicitation message and send router advertisement to the sender.
      */
-    action ndp_ns_to_na(mac_addr_t router_mac) {
-        hdr.ethernet.src_addr = router_mac;
+    action ndp_ns_to_na(mac_addr_t target_mac) {
+        hdr.ethernet.src_addr = target_mac;
         hdr.ethernet.dst_addr = IPV6_MCAST_01;
         bit<128> host_ipv6_tmp = hdr.ipv6.src_addr;
         hdr.ipv6.src_addr = hdr.ndp.target_addr;
