@@ -50,7 +50,7 @@ onos> hosts -s
 id=00:00:00:00:00:1A/None, mac=00:00:00:00:00:1A, locations=[device:leaf1/3], vlan=None, ip(s)=[2001:1:1::a]
 ```
 
-The host MAC address, as well as the location, and the IPv6 address have been
+The host MAC address, the location, and the IPv6 address have been
 learned by the `hostprovider` app by sniffing the NDP NS packet.
 
 ## Exercise steps
@@ -164,14 +164,14 @@ interface configuration in [netcfg.json](netcfg.json) file (look for the `ports`
 section of the JSON file).
 
 The starter code already provides an implementation of the method
-`insertMulticastGroup()`, you are required to complete the implementation of two
-other methods, `insertMulticastFlowRules()` and `learnHost()`.
+`insertMulticastGroup()`; you are required to complete the implementation of two
+other methods: `insertMulticastFlowRules()` and `learnHost()`.
 
-#### Enable component
+#### Enable the bridging component
 
 Once you're confident your solution to the previous step should work, before
 building and reloading the app, remember to enable the component by setting the
-`enabled` flag on top of the class definition:
+`enabled` flag to `true` at the top of the class definition:
 
 ```
 /**
@@ -187,11 +187,10 @@ public class L2BridgingComponent {
 
 #### Build and reload the app
 
-Use the following commands to build and reload your app while ONOS is running:
+Use the following command to build and reload your app while ONOS is running:
 
 ```
-$ make app-build
-$ make app-reload
+$ make app-build app-reload
 ```
 
 When building the app, the modified P4 compiler outputs (`bmv2.json` and
@@ -224,24 +223,24 @@ Before trying your solution in Mininet, it's worth looking at the ONOS log for
 possible errors. There are mainly 2 types of errors that you might see when
 reloading the app:
 
-1. Write errors like removing a nonexistent entity or inserting one that
-   already exists, such as:
+1. Write errors, such as removing a nonexistent entity or inserting one that
+   already exists:
 
     ```
     WARN  [WriteResponseImpl] Unable to DELETE PRE entry on device...: NOT_FOUND Multicast group does not exist ...
     WARN  [WriteResponseImpl] Unable to INSERT table entry on device...: ALREADY_EXIST Match entry exists, use MODIFY if you wish to change action ...
     ```
     
-    These are usually transient errors and **you should not worry about it**.
+    These are usually transient errors and **you should not worry about them**.
     They describe a temporary inconsistency of the ONOS-internal device state,
     which should be soon recovered by a periodic reconciliation mechanism.
-    Indeed, the ONOS core periodically polls the device state to make sure it's
+    The ONOS core periodically polls the device state to make sure its
     internal representation is accurate, while writing any pending modifications
     to the device, solving these errors.
     
     Otherwise, if you see them appearing periodically (every 3-4 seconds), it
     means the reconciliation process is not working and something else is wrong.
-    Try re-loading the app (`make app-reload`), if it doesn't work, check with
+    Try re-loading the app (`make app-reload`); if that doesn't resolve the warnings, check with
     the instructors.
     
 2. Translation errors, signifying that ONOS is not able to translate the flow
@@ -259,9 +258,9 @@ reloading the app:
 
 ### 4. Test L2 bridging on Mininet
 
-Now that the app has been modified and reloaded, and the ONOS log is free
+Now that the app has been modified and reloaded and the ONOS log is free
 of potentially harmful errors, you should be able to repeat the same ping
-test done at the beginning of the exercise and expect it to work:
+test done at the beginning of the exercise. This time it should work:
 
 ```
 mininet> h1a ping h1b
@@ -296,13 +295,13 @@ network:
 
 2. **Use table counters to verify that tables are being hit as expected.**
    If you don't already have direct counters defined for your L2 table(s),
-   modify the P4 program to add some, build and reload the app (`make app-build
-   && make app-reload`). ONOS should automatically detect that and poll counters
+   modify the P4 program to add some, build and reload the app (`make app-build app-reload`).
+   ONOS should automatically detect that and poll counters
    every 3-4 seconds (the same period for the reconciliation process). To check
    their values, you can either use the ONOS CLI (`flows -s any device:leaf1`)
    or the web UI.
 
-3. **Check again the PTF tests** and make sure you are creating similar flow
+3. **Double check the PTF tests** and make sure you are creating similar flow
    rules in the `L2BridgingComponent.java`. Do you notice any difference?
 
 4. **Look at the BMv2 logs for possible errors.** Check files in
