@@ -167,8 +167,8 @@ OK
 At this point, our P4 program should be complete. We can check to make sure that we haven't
 broken anything from the previous exercises by running all of tests from the `ptf` directory:
 
-```bash
-make test
+```
+$ make test
 ```
 
 Now we have shown that we can install basic rules and pass SRv6 traffic using BMv2.
@@ -192,7 +192,7 @@ Once you are finished, you should rebuild and reload your app. This will also re
 changes to your P4 code and the ONOS pipeconf.
 As with previous exercises, you can use the following command to build and reload the app:
 
-```bash
+```
 $ make app-build app-reload
 ```
 

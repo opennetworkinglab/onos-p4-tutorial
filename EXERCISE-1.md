@@ -160,7 +160,7 @@ deployed by ONOS to the device after the connection is initiated.
 
 In a terminal window, type:
 
-```bash
+```
 $ make onos-run
 ```
 
@@ -195,8 +195,8 @@ INFO  [AtomixClusterStore] Updated node 127.0.0.1 state to READY
 To **verify that all required apps have been activated**, run the following
 command in a new terminal window to access the ONOS CLI:
 
-```bash
-make onos-cli
+```
+$ make onos-cli
 ```
 
 Type the following command in the ONOS CLI to show the list of running apps:
@@ -244,7 +244,7 @@ onos-run`.
 
 In the second terminal window, type:
 
-```bash
+```
 $ make app-reload
 ```
 
@@ -283,7 +283,7 @@ ONOS at each reload.
 
 On a third terminal window, type:
 
-```bash
+```
 $ make topo
 ```
 
@@ -311,7 +311,7 @@ the 4 switches and control them.
 
 On a fourth terminal window (or your second window if you are conserving shells), type:
 
-```bash
+```
 $ make netcfg
 ```
 
