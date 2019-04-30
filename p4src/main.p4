@@ -97,12 +97,6 @@ control FabricIngress (inout parsed_headers_t hdr,
      * Handles IPv6 routing. Pick a next hop address according to hash of packet header fields
      * (IPv6 source/destination address and the flow label).
      */
-    action set_l2_next_hop(mac_addr_t dmac) {
-        hdr.ethernet.src_addr = hdr.ethernet.dst_addr;
-        hdr.ethernet.dst_addr = dmac;
-        hdr.ipv6.hop_limit = hdr.ipv6.hop_limit - 1;
-    }
-
     action_selector(HashAlgorithm.crc16, 32w64, 32w16) ecmp_selector;
     direct_counter(CounterType.packets_and_bytes) l3_table_counter;
 
@@ -175,11 +169,27 @@ control FabricIngress (inout parsed_headers_t hdr,
       }
       counters = srv6_transit_table_counter;
     }
+    
+    action srv6_pop() {
+      hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
+      // SRv6 header is 8 bytes
+      // SRv6 list entry is 16 bytes each
+      // (((bit<16>)hdr.srv6h.last_entry + 1) * 16) + 8;
+      bit<16> srv6h_size = (((bit<16>)hdr.srv6h.last_entry + 1) << 4) + 8;
+      hdr.ipv6.payload_len = hdr.ipv6.payload_len - srv6h_size;
+
+      hdr.srv6h.setInvalid();
+      // Need to set MAX_HOPS headers invalid
+      hdr.srv6_list[0].setInvalid();
+      hdr.srv6_list[1].setInvalid();
+      hdr.srv6_list[2].setInvalid();
+    }
 
     /*
-     * ACL table.
-     * Clone the packet to the CPU (PacketIn) or drop the packet.
+     * ACL table  and actions.
+     * Clone the packet to the CPU (PacketIn) or drop.
      */
+
     action clone_to_cpu() {
         clone3(CloneType.I2E, CPU_CLONE_SESSION_ID, standard_metadata);
     }
@@ -203,27 +213,13 @@ control FabricIngress (inout parsed_headers_t hdr,
         counters = acl_counter;
     }
 
-    action srv6_pop() {
-      hdr.ipv6.next_hdr = hdr.srv6h.next_hdr;
-      // SRv6 header is 8 bytes
-      // SRv6 list entry is 16 bytes each
-      // (((bit<16>)hdr.srv6h.last_entry + 1) * 16) + 8;
-      bit<16> srv6h_size = (((bit<16>)hdr.srv6h.last_entry + 1) << 4) + 8;
-      hdr.ipv6.payload_len = hdr.ipv6.payload_len - srv6h_size;
-
-      hdr.srv6h.setInvalid();
-      // Need to set MAX_HOPS headers invalid
-      hdr.srv6_list[0].setInvalid();
-      hdr.srv6_list[1].setInvalid();
-      hdr.srv6_list[2].setInvalid();
-    }
-
     apply {
         if (hdr.packet_out.isValid()) {
             standard_metadata.egress_spec = hdr.packet_out.egress_port;
             hdr.packet_out.setInvalid();
             exit;
         }
+
         if (hdr.icmpv6.isValid() && hdr.icmpv6.type == ICMP6_TYPE_NS) {
             ndp_reply_table.apply();
         }
