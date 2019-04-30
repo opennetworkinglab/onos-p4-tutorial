@@ -271,10 +271,10 @@ Type the following commands in the Mininet CLI, in order:
 ```
 mininet> h2 ping h3
 mininet> h3 ping h2
-PING 2001:1:2::a(2001:1:2::a) 56 data bytes
-64 bytes from 2001:1:2::a: icmp_seq=2 ttl=61 time=2.39 ms
-64 bytes from 2001:1:2::a: icmp_seq=3 ttl=61 time=2.29 ms
-64 bytes from 2001:1:2::a: icmp_seq=4 ttl=61 time=2.71 ms
+PING 2001:1:2::1(2001:1:2::1) 56 data bytes
+64 bytes from 2001:1:2::1: icmp_seq=2 ttl=61 time=2.39 ms
+64 bytes from 2001:1:2::1: icmp_seq=3 ttl=61 time=2.29 ms
+64 bytes from 2001:1:2::1: icmp_seq=4 ttl=61 time=2.71 ms
 ...
 ```
 
@@ -285,7 +285,7 @@ The ONOS log should show messages such as:
 
 ```
 INFO  [Ipv6RoutingComponent] HOST_ADDED event! host=00:00:00:00:00:20/None, deviceId=device:leaf1, port=6
-INFO  [Ipv6RoutingComponent] Adding routes on device:leaf1 for host 00:00:00:00:00:20/None [[2001:1:2::a]]
+INFO  [Ipv6RoutingComponent] Adding routes on device:leaf1 for host 00:00:00:00:00:20/None [[2001:1:2::1]]
 ...
 INFO  [Ipv6RoutingComponent] HOST_ADDED event! host=00:00:00:00:00:30/None, deviceId=device:leaf2, port=3
 INFO  [Ipv6RoutingComponent] Adding routes on device:leaf2 for host 00:00:00:00:00:30/None [[2001:2:3::1]]
