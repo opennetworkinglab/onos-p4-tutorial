@@ -268,6 +268,7 @@ public class L2BridgingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
+        final String tableId = "FabricIngress.l2_exact_table";
         // Match exactly on the host MAC address.
         final MacAddress hostMac = host.mac();
         final PiCriterion hostMacCriterion = PiCriterion.builder()
@@ -285,8 +286,7 @@ public class L2BridgingComponent {
 
         // Forge flow rule.
         final FlowRule rule = Utils.buildFlowRule(
-                deviceId, appId, "FabricIngress.l2_exact_table",
-                hostMacCriterion, l2UnicastAction);
+                deviceId, appId, tableId, hostMacCriterion, l2UnicastAction);
         // ---- END SOLUTION ----
 
         // Insert.

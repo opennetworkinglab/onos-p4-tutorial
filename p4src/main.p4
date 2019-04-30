@@ -65,49 +65,22 @@ control FabricIngress (inout parsed_headers_t hdr,
     }
 
     /*
-     * L2 exact table.
+     * TODO EXERCISE 2
+     * Create L2 table(s). Our solution uses two tables: one for unicast and one for broadcast/multicast.
+     * We have already provided both the unicast (set_output_port) and multicast (set_multicast_group)
+     * actions for you to use.
+     * If you choose to use two tables, what should the default actions be for each table?
+     * You should add a direct counter to the table if you would like to see flow stats in ONOS.
      * Matches the destination Ethernet address and set output port or do nothing.
      */
-
     action set_output_port(port_num_t port_num) {
         standard_metadata.egress_spec = port_num;
     }
-
-    direct_counter(CounterType.packets_and_bytes) l2_exact_table_counter;
-    table l2_exact_table {
-        key = {
-            hdr.ethernet.dst_addr: exact;
-        }
-        actions = {
-            set_output_port;
-            @defaultonly NoAction;
-        }
-        const default_action = NoAction;
-        counters = l2_exact_table_counter;
-    }
-
-    /*
-     * L2 ternary table.
-     * Handles broadcast address (FF:FF:FF:FF:FF:FF) and multicast address (33:33:*:*:*:*) and set multicast
-     * group id for the packet.
-     */
     action set_multicast_group(group_id_t gid) {
         standard_metadata.mcast_grp = gid;
         fabric_metadata.is_multicast = true;
     }
 
-    direct_counter(CounterType.packets_and_bytes) l2_ternary_table_counter;
-    table l2_ternary_table {
-        key = {
-            hdr.ethernet.dst_addr: ternary;
-        }
-        actions = {
-            set_multicast_group;
-            drop;
-        }
-        const default_action = drop;
-        counters = l2_ternary_table_counter;
-    }
 
     /*
      * TODO EXERCISE 3
@@ -263,11 +236,10 @@ control FabricIngress (inout parsed_headers_t hdr,
         // Insert logic to match the SRv6 My SID and Transit tables as well as logic to perform PSP behavior
         // HINT: This logic belongs somewhere between checking the switch's my station table and applying the
         //       routing table.
-        if (!fabric_metadata.skip_l2 && standard_metadata.drop != 1w1) {
-            if (!l2_exact_table.apply().hit) {
-                l2_ternary_table.apply();
-            }
-        }
+
+        // TODO EXERCISE 2
+        // Insert logic to apply your L2 table(s). You probably want to chain them together with a conditional
+        // based on whether or not there was a hit in the first one.
 
         acl.apply();
     }

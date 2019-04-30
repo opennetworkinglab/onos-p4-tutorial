@@ -64,7 +64,7 @@ import static org.p4.p4d2.tutorial.AppConstants.INITIAL_SETUP_DELAY;
         immediate = true,
         // TODO EXERCISE 2
         // Enable component (enabled = true)
-        enabled = true
+        enabled = false
 )
 public class L2BridgingComponent {
 
@@ -210,29 +210,30 @@ public class L2BridgingComponent {
         // Match ARP request - Match exactly FF:FF:FF:FF:FF
         final PiCriterion macBroadcastCriterion = PiCriterion.builder()
                 .matchTernary(
-                        PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                        MacAddress.valueOf("FF:FF:FF:FF:FF:FF").toBytes(),
-                        MacAddress.valueOf("FF:FF:FF:FF:FF:FF").toBytes())
+                        PiMatchFieldId.of("MODIFY ME"),
+                        MacAddress.valueOf("MODIFY ME").toBytes(),
+                        MacAddress.valueOf("MODIFY ME").toBytes())
                 .build();
 
         // Match NDP NS - Match ternary 33:33:**:**:**:**
         final PiCriterion ipv6MulticastCriterion = PiCriterion.builder()
                 .matchTernary(
-                        PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                        MacAddress.valueOf("33:33:00:00:00:00").toBytes(),
-                        MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
+                        PiMatchFieldId.of("MODIFY ME"),
+                        MacAddress.valueOf("MODIFY ME").toBytes(),
+                        MacAddress.valueOf("MODIFY ME").toBytes())
                 .build();
 
         // Action: set multicast group id (the same used )
         final PiAction setMcastGroupAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
+                .withId(PiActionId.of("MODIFY ME"))
                 .withParameter(new PiActionParam(
-                        PiActionParamId.of("gid"),
+                        PiActionParamId.of("MODIFY ME"),
                         DEFAULT_BROADCAST_GROUP_ID))
                 .build();
 
         //  Build 2 flow rules.
-        final String tableId = "FabricIngress.l2_ternary_table";
+        final String tableId = "MODIFY ME";
+        // ---- END SOLUTION ----
 
         final FlowRule rule1 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
@@ -241,7 +242,6 @@ public class L2BridgingComponent {
         final FlowRule rule2 = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 ipv6MulticastCriterion, setMcastGroupAction);
-        // ---- END SOLUTION ----
 
         // Insert rules.
         flowRuleService.applyFlowRules(rule1, rule2);
@@ -268,26 +268,26 @@ public class L2BridgingComponent {
         // Modify P4Runtime entity names to match content of P4Info file (look
         // for the fully qualified name of tables, match fields, and actions.
         // ---- START SOLUTION ----
+        final String tableId = "MODIFY ME";
         // Match exactly on the host MAC address.
         final MacAddress hostMac = host.mac();
         final PiCriterion hostMacCriterion = PiCriterion.builder()
-                .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                .matchExact(PiMatchFieldId.of("MODIFY ME"),
                             hostMac.toBytes())
                 .build();
 
         // Action: set output port
         final PiAction l2UnicastAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_output_port"))
+                .withId(PiActionId.of("MODIFY ME"))
                 .withParameter(new PiActionParam(
-                        PiActionParamId.of("port_num"),
+                        PiActionParamId.of("MODIFY ME"),
                         port.toLong()))
                 .build();
+        // ---- END SOLUTION ----
 
         // Forge flow rule.
         final FlowRule rule = Utils.buildFlowRule(
-                deviceId, appId, "FabricIngress.l2_exact_table",
-                hostMacCriterion, l2UnicastAction);
-        // ---- END SOLUTION ----
+                deviceId, appId, tableId, hostMacCriterion, l2UnicastAction);
 
         // Insert.
         flowRuleService.applyFlowRules(rule);

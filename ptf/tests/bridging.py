@@ -80,16 +80,16 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_ternary_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "hdr.ethernet.dst_addr": (
-                    "FF:FF:FF:FF:FF:FF",
-                    "FF:FF:FF:FF:FF:FF")
+                "MODIFY ME": (
+                    "MODIFY ME",
+                    "MODIFY ME")
             },
-            action_name="FabricIngress.set_multicast_group",
+            action_name="MODIFY ME",
             action_params={
-                "gid": mcast_group_id
+                "MODIFY ME": mcast_group_id
             },
             priority=DEFAULT_PRIORITY
         ))
@@ -101,16 +101,16 @@ class ArpNdpRequestWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_ternary_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Ternary match (value, mask)
-                "hdr.ethernet.dst_addr": (
-                    "33:33:00:00:00:00",
-                    "FF:FF:00:00:00:00")
+                "MODIFY ME": (
+                    "MODIFY ME",
+                    "MODIFY ME")
             },
-            action_name="FabricIngress.set_multicast_group",
+            action_name="MODIFY ME",
             action_params={
-                "gid": mcast_group_id
+                "MODIFY ME": mcast_group_id
             },
             priority=DEFAULT_PRIORITY
         ))
@@ -196,14 +196,14 @@ class ArpNdpReplyWithCloneTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Ternary match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
         # ---- END SOLUTION ----
@@ -273,14 +273,14 @@ class BridgingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt[Ether].dst
+                "MODIFY ME": pkt[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port2
+                "MODIFY ME": self.port2
             }
         ))
         # ---- END SOLUTION ----
@@ -294,14 +294,14 @@ class BridgingTest(P4RuntimeTest):
         # qualified name of tables, match fields, and actions.
         # ---- START SOLUTION ----
         self.insert(self.helper.build_table_entry(
-            table_name="FabricIngress.l2_exact_table",
+            table_name="MODIFY ME",
             match_fields={
                 # Exact match.
-                "hdr.ethernet.dst_addr": pkt2[Ether].dst
+                "MODIFY ME": pkt2[Ether].dst
             },
-            action_name="FabricIngress.set_output_port",
+            action_name="MODIFY ME",
             action_params={
-                "port_num": self.port1
+                "MODIFY ME": self.port1
             }
         ))
         # ---- END SOLUTION ----
