@@ -169,6 +169,9 @@ class ONOSBmv2Switch(Switch):
         # Remove files from previous executions
         self.cleanupTmpFiles()
 
+    def disableIpv6(self, iface):
+        self.cmd("sysctl -w net.ipv6.conf.%s.disable_ipv6=1" % iface)
+
     def getSourceIp(self, dstIP):
         """
         Queries the Linux routing table to get the source IP that can talk with
@@ -303,6 +306,11 @@ nodes {{
 
         # Remove files from previous executions (if we are restarting)
         self.cleanupTmpFiles()
+
+        # Disable IPv6 from all interfaces to avoid unexpected router
+        # solicitation message.
+        for port, intf in self.intfs.items():
+            self.disableIpv6(intf.name)
 
         if self.grpcPort is None:
             self.grpcPort = pickUnusedPort()
