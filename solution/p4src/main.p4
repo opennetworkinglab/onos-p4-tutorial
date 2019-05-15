@@ -43,7 +43,7 @@ control IngressPipeImpl (inout parsed_headers_t hdr,
         hdr.ipv6.src_addr = hdr.ndp.target_addr;
         hdr.ipv6.dst_addr = host_ipv6_tmp;
         hdr.icmpv6.type = ICMP6_TYPE_NA;
-        hdr.ndp.flags = NDP_FLAG_ROUTER | NDP_FLAG_OVERRIDE;
+        hdr.ndp.flags = NDP_FLAG_ROUTER | NDP_FLAG_OVERRIDE | NDP_FLAG_SOLICITED;
         hdr.ndp_option.setValid();
         hdr.ndp_option.type = NDP_OPT_TARGET_LL_ADDR;
         hdr.ndp_option.length = 1;

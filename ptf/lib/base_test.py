@@ -198,7 +198,7 @@ def genNdpNaPkt(target_ip, target_mac,
                 src_ip=SWITCH1_IPV6, dst_ip=HOST1_IPV6):
     p = Ether(src=src_mac, dst=dst_mac)
     p /= IPv6(dst=dst_ip, src=src_ip, hlim=255)
-    p /= ICMPv6ND_NA(tgt=target_ip)
+    p /= ICMPv6ND_NA(tgt=target_ip, S=1, O=1, R=1)
     p /= ICMPv6NDOptDstLLAddr(lladdr=target_mac)
     return p
 
