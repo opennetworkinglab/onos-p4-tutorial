@@ -12,6 +12,18 @@ include activities such as:
  * Writing P4 unit tests using the Packet Test Framework (PTF)
  * Implementing an ONOS app providing the fabric control plane
 
+## Slides
+
+Tutorial slides are available [online](<http://bit.ly/onos-p4-srv6>). These
+slides provide an introduction to each exercise as well as the software tools
+used. We suggest you look at it before starting to work on the exercises.
+
+### P4 Cheat Sheet
+
+A P4 language cheat sheet is also available
+[online](https://drive.google.com/file/d/1Z8woKyElFAOP6bMd8tRa_Q4SA1cd_Uva/view?usp=sharing).
+It contains various P4 code examples that you can refer to.
+
 ## Tutorial VM
 
 To complete the exercises, you will need to download and run this tutorial VM
@@ -112,14 +124,14 @@ the exercises, here's a quick reference:
 
 Click on the exercise name to see the instructions:
 
- 1. [Software tools basics](./EXERCISE-1.md)
+ 1. [Software tools basics and packet I/O](./EXERCISE-1.md)
  2. [L2 bridging](./EXERCISE-2.md)
  3. [IPv6 routing](./EXERCISE-3.md)
  4. [Segment Routing v6](./EXERCISE-4.md)
 
-## Solutions for each exercise
+## Solutions
 
-You can find solutions for each exercise in the [solution](solution) directory
-To use the solution code that is provided, simply use the same tutorial **make**
-command in the solution directory. So you don't need to replace the code you are
-working on.
+You can find solutions for each exercise in the [solution](solution) directory.
+Feel free to compare your implementation to the reference one whenever you feel
+stuck. To use the solution code that is provided, simply use the same **make**
+commands in the solution directory.
