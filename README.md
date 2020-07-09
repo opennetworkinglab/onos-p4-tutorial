@@ -1,3 +1,14 @@
+# DEPRECATED
+
+This tutorial is outdated and no longer maintained. Instead, please check the more recent
+NG-SDN tutorial:
+https://github.com/opennetworkinglab/ngsdn-tutorial
+
+The `advanced` branch of the `ngsdn-tutorial` repo contains a revised version of the
+exercises in this repo.
+
+***
+
 # P4+ONOS SRv6 Tutorial
 
 Welcome to the P4+ONOS SRv6 tutorial! The goal of this tutorial is to teach you
